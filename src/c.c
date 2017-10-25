@@ -12,7 +12,7 @@ char* src_to_obj(
     void *ctx) 
 {
     char *result = malloc(strlen(in) + strlen(OBJ_DIR) + 2);
-    sprintf(result, OBJ_DIR "/%s", in + 4); /* strip 'src/' */
+    sprintf(result, OBJ_DIR "/%s", in);
     char *ext = strrchr(result, '.');
     strcpy(ext + 1, "o");
     return result;
@@ -154,6 +154,16 @@ void link_binary(
 
     corto_buffer_append(&cmd, " %s", source);
 
+    bake_project_attr *lib_attr = p->get_attr("lib");
+
+    if (lib_attr) {
+        corto_iter it = corto_ll_iter(lib_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *lib = corto_iter_next(&it);
+            corto_buffer_append(&cmd, " -l%s", lib->is.string);
+        }
+    }
+
     corto_buffer_append(&cmd, " -o %s", target);
 
     char *cmdstr = corto_buffer_str(&cmd);
@@ -195,13 +205,13 @@ int bakemain(bake_language *l) {
     l->rule("gen-code", "$DEFINITION", l->target_pattern("$gen-sources"), gen_source);
 
     /* Create pattern that matches source files */
-    l->pattern("sources", "src//*.c");
+    l->pattern("SOURCES", "//*.c");
 
     /* Create rule for dynamically generating dep files from source files */
-    l->rule("deps", "$sources", l->target_map(src_to_dep), generate_deps);
+    l->rule("deps", "$SOURCES", l->target_map(src_to_dep), generate_deps);
 
     /* Create rule for dynamically generating object files from source files */
-    l->rule("objects", "$sources", l->target_map(src_to_obj), compile_src);
+    l->rule("objects", "$SOURCES", l->target_map(src_to_obj), compile_src);
 
     /* Create rule for dynamically generating dependencies for every object in
      * $objects, using the generated dependency files. */
