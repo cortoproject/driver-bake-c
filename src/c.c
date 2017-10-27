@@ -100,6 +100,15 @@ void compile_src(
         corto_buffer_appendstr(&cmd, " -O0");
     }
 
+    bake_project_attr *include_attr = p->get_attr("include");
+    if (include_attr) {
+        corto_iter it = corto_ll_iter(include_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *include = corto_iter_next(&it);
+            corto_buffer_append(&cmd, " -I%s", include->is.string);
+        }
+    }
+
     corto_buffer_append(&cmd, " -I $CORTO_TARGET/include/corto/$CORTO_VERSION");
 
     if (strcmp(corto_getenv("CORTO_TARGET"), corto_getenv("CORTO_HOME"))) {
@@ -142,7 +151,7 @@ void link_binary(
     corto_buffer_appendstr(
         &cmd, "gcc -Wall -pedantic -Werror -fPIC -std=c99 -D_XOPEN_SOURCE=600");
 
-    if (p->kind == BAKE_LIBRARY) {
+    if (p->kind == BAKE_PACKAGE) {
         corto_buffer_appendstr(&cmd, " --shared");
     }
 
@@ -155,13 +164,19 @@ void link_binary(
     corto_buffer_append(&cmd, " %s", source);
 
     bake_project_attr *lib_attr = p->get_attr("lib");
-
     if (lib_attr) {
         corto_iter it = corto_ll_iter(lib_attr->is.array);
         while (corto_iter_hasNext(&it)) {
             bake_project_attr *lib = corto_iter_next(&it);
             corto_buffer_append(&cmd, " -l%s", lib->is.string);
         }
+    }
+
+    corto_iter it = corto_ll_iter(p->use);
+    while (corto_iter_hasNext(&it)) {
+        char *use = corto_iter_next(&it);
+        char *lib = corto_locate(use, NULL, CORTO_LOCATION_LIB);
+        corto_buffer_append(&cmd, " %s", lib);
     }
 
     corto_buffer_append(&cmd, " -o %s", target);
@@ -172,9 +187,8 @@ void link_binary(
 }
 
 static
-int16_t artefact_name(
+char* artefact_name(
     bake_language *l,
-    bake_filelist *fl,
     bake_project *p)
 {
     char *base = strrchr(p->id, '/');
@@ -184,12 +198,10 @@ int16_t artefact_name(
         base ++;
     }
 
-    if (p->kind == BAKE_LIBRARY) {
-        corto_id libname;
-        sprintf(libname, "lib%s.so", base);
-        return fl->set(libname);
+    if (p->kind == BAKE_PACKAGE) {
+        return corto_asprintf("lib%s.so", base);
     } else {
-        return fl->set(base);
+        return corto_strdup(base);
     }
 }
 
