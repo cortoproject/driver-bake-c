@@ -49,7 +49,46 @@ void gen_source(
     char *target, 
     void *ctx)
 {
+    corto_buffer cmd = CORTO_BUFFER_INIT;
 
+    corto_buffer_append(
+        &cmd, 
+        "corto pp %s --scope %s --name %s --attr c=src --attr h=include", 
+        source, 
+        p->id, 
+        p->id);
+
+    if (corto_ll_size(p->use)) {
+        corto_buffer imports = CORTO_BUFFER_INIT;
+        corto_buffer_append(&imports, " --use ");
+        corto_iter it = corto_ll_iter(p->use);
+        int count = 0;
+        while (corto_iter_hasNext(&it)) {
+            char *use = corto_iter_next(&it);
+            char *lastElem = strrchr(use, '/');
+            if (!lastElem || strcmp(lastElem, "/c")) {
+                if (count) {
+                    corto_buffer_append(&imports, ",");
+                }
+                corto_buffer_appendstr(&imports, use);
+                count ++;
+            }
+        }
+        if (count) {
+            char *importStr = corto_buffer_str(&imports);
+            corto_buffer_appendstr(&cmd, importStr);
+        }
+    }
+
+    if (!p->public) {
+        corto_buffer_append(&cmd, " --attr local=true");
+    }
+
+    corto_buffer_append(&cmd, " --lang %s", p->language);
+
+    char *cmdstr = corto_buffer_str(&cmd);
+    l->exec(cmdstr);
+    free(cmdstr);
 }
 
 static
@@ -152,7 +191,7 @@ void link_binary(
         &cmd, "gcc -Wall -pedantic -Werror -fPIC -std=c99 -D_XOPEN_SOURCE=600");
 
     if (p->kind == BAKE_PACKAGE) {
-        corto_buffer_appendstr(&cmd, " --shared");
+        corto_buffer_appendstr(&cmd, " --shared -Wl,-z,defs");
     }
 
     if (c->optimizations) {
@@ -172,10 +211,9 @@ void link_binary(
         }
     }
 
-    corto_iter it = corto_ll_iter(p->use);
+    corto_iter it = corto_ll_iter(p->link);
     while (corto_iter_hasNext(&it)) {
-        char *use = corto_iter_next(&it);
-        char *lib = corto_locate(use, NULL, CORTO_LOCATION_LIB);
+        char *lib = corto_iter_next(&it);
         corto_buffer_append(&cmd, " %s", lib);
     }
 
@@ -214,7 +252,7 @@ int bakemain(bake_language *l) {
     l->pattern("gen-sources", ".corto/gen//*.c");
 
     /* Generate rule for dynamically generating source for definition file */
-    l->rule("gen-code", "$DEFINITION", l->target_pattern("$gen-sources"), gen_source);
+    l->rule("GENERATED-SOURCES", "$MODEL", l->target_pattern("$gen-sources"), gen_source);
 
     /* Create pattern that matches source files */
     l->pattern("SOURCES", "//*.c");
@@ -223,7 +261,7 @@ int bakemain(bake_language *l) {
     l->rule("deps", "$SOURCES", l->target_map(src_to_dep), generate_deps);
 
     /* Create rule for dynamically generating object files from source files */
-    l->rule("objects", "$SOURCES", l->target_map(src_to_obj), compile_src);
+    l->rule("objects", "$SOURCES,$gen-sources", l->target_map(src_to_obj), compile_src);
 
     /* Create rule for dynamically generating dependencies for every object in
      * $objects, using the generated dependency files. */
