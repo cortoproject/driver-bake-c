@@ -3,6 +3,19 @@
 
 #define OBJ_DIR ".corto/obj"
 
+static
+char* get_short_name(
+    char *package)
+{
+    char *result = strrchr(package, '/');
+    if (!result) {
+        result = package;
+    } else {
+        result ++;
+    }
+    return result;
+}
+
 /* -- Mappings */
 static 
 char* src_to_obj(
@@ -50,13 +63,15 @@ void gen_source(
     void *ctx)
 {
     corto_buffer cmd = CORTO_BUFFER_INIT;
+    char *shortName = get_short_name(p->id);
 
     corto_buffer_append(
         &cmd, 
-        "corto pp %s --scope %s --name %s --attr c=src --attr h=include", 
+        "corto pp %s --scope %s --name %s --prefix %s --attr c=src --attr h=include --attr hidden=.corto/gen", 
         source, 
         p->id, 
-        p->id);
+        p->id,
+        shortName);
 
     if (corto_ll_size(p->use)) {
         corto_buffer imports = CORTO_BUFFER_INIT;
@@ -229,12 +244,7 @@ char* artefact_name(
     bake_language *l,
     bake_project *p)
 {
-    char *base = strrchr(p->id, '/');
-    if (!base) {
-        base = p->id;
-    } else {
-        base ++;
-    }
+    char *base = get_short_name(p->id);
 
     if (p->kind == BAKE_PACKAGE) {
         return corto_asprintf("lib%s.so", base);
