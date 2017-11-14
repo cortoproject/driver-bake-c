@@ -17,12 +17,12 @@ char* get_short_name(
 }
 
 /* -- Mappings */
-static 
+static
 char* src_to_obj(
-    bake_language *l,     
-    bake_project *p, 
+    bake_language *l,
+    bake_project *p,
     const char *in,
-    void *ctx) 
+    void *ctx)
 {
     char *result = malloc(strlen(in) + strlen(OBJ_DIR) + 2);
     sprintf(result, OBJ_DIR "/%s", in);
@@ -32,10 +32,10 @@ char* src_to_obj(
 }
 
 char* src_to_dep(
-    bake_language *l,       
-    bake_project *p, 
+    bake_language *l,
+    bake_project *p,
     const char *in,
-    void *ctx) 
+    void *ctx)
 {
     printf("src to dep (%s)\n", in);
     return NULL;
@@ -45,7 +45,7 @@ char* obj_to_dep(
     bake_language *l,
     bake_project *p,
     const char *in,
-    void *ctx) 
+    void *ctx)
 {
     printf("obj to dep (%s)\n", in);
     return NULL;
@@ -56,63 +56,75 @@ char* obj_to_dep(
 static
 void gen_source(
     bake_language *l,
-    bake_project *p, 
-    bake_config *c,    
-    char *source, 
-    char *target, 
+    bake_project *p,
+    bake_config *c,
+    char *source,
+    char *target,
     void *ctx)
 {
-    corto_buffer cmd = CORTO_BUFFER_INIT;
-    char *shortName = get_short_name(p->id);
+    if (p->managed) {
+        corto_buffer cmd = CORTO_BUFFER_INIT;
+        char *shortName = get_short_name(p->id);
 
-    corto_buffer_append(
-        &cmd, 
-        "corto pp %s --scope %s --name %s --prefix %s --attr c=src --attr h=include --attr hidden=.corto/gen", 
-        source, 
-        p->id, 
-        p->id,
-        shortName);
+        if (p->model) {
+            corto_buffer_append(
+                &cmd,
+                "corto pp %s --scope %s --lang %s",
+                p->model,
+                p->id,
+                p->language);
+        } else {
+            corto_buffer_append(
+                &cmd,
+                "corto pp -g c/interface -g c/project");
+        }
 
-    if (corto_ll_size(p->use)) {
-        corto_buffer imports = CORTO_BUFFER_INIT;
-        corto_buffer_append(&imports, " --use ");
-        corto_iter it = corto_ll_iter(p->use);
-        int count = 0;
-        while (corto_iter_hasNext(&it)) {
-            char *use = corto_iter_next(&it);
-            char *lastElem = strrchr(use, '/');
-            if (!lastElem || strcmp(lastElem, "/c")) {
+        corto_buffer_append(
+            &cmd,
+            " --name %s --prefix %s --attr c=src --attr h=include --attr hidden=.corto/gen",
+            p->id,
+            shortName);
+
+        if (corto_ll_size(p->use)) {
+            corto_buffer imports = CORTO_BUFFER_INIT;
+            corto_buffer_append(&imports, " --use ");
+            corto_iter it = corto_ll_iter(p->use);
+            int count = 0;
+            while (corto_iter_hasNext(&it)) {
+                char *use = corto_iter_next(&it);
+                if (!strcmp(use, strarg("%s/c", p->id))) {
+                  /* No need to explicitly add own /c package */
+                  continue;
+                }
                 if (count) {
                     corto_buffer_append(&imports, ",");
                 }
                 corto_buffer_appendstr(&imports, use);
                 count ++;
             }
+            if (count) {
+                char *importStr = corto_buffer_str(&imports);
+                corto_buffer_appendstr(&cmd, importStr);
+            }
         }
-        if (count) {
-            char *importStr = corto_buffer_str(&imports);
-            corto_buffer_appendstr(&cmd, importStr);
+
+        if (!p->public) {
+            corto_buffer_append(&cmd, " --attr local=true");
         }
+
+        char *cmdstr = corto_buffer_str(&cmd);
+        l->exec(cmdstr);
+        free(cmdstr);
     }
-
-    if (!p->public) {
-        corto_buffer_append(&cmd, " --attr local=true");
-    }
-
-    corto_buffer_append(&cmd, " --lang %s", p->language);
-
-    char *cmdstr = corto_buffer_str(&cmd);
-    l->exec(cmdstr);
-    free(cmdstr);
 }
 
 static
 void generate_deps(
     bake_language *l,
-    bake_project *p, 
+    bake_project *p,
     bake_config *c,
-    char *source, 
-    char *target, 
+    char *source,
+    char *target,
     void *ctx)
 {
 
@@ -121,15 +133,17 @@ void generate_deps(
 static
 void compile_src(
     bake_language *l,
-    bake_project *p, 
+    bake_project *p,
     bake_config *c,
-    char *source, 
-    char *target, 
+    char *source,
+    char *target,
     void *ctx)
 {
     corto_buffer cmd = CORTO_BUFFER_INIT;
     corto_buffer_appendstr(
         &cmd, "gcc -Wall -pedantic -Werror -fPIC -std=c99 -D_XOPEN_SOURCE=600");
+
+    corto_buffer_append(&cmd, " -DPACKAGE_ID=\"%s\"", p->id);
 
     char *building_macro = corto_asprintf(" -DBUILDING_%s", p->id);
     strupper(building_macro);
@@ -141,6 +155,16 @@ void compile_src(
     }
     corto_buffer_appendstr(&cmd, building_macro);
     free(building_macro);
+
+    char *etc_macro = corto_asprintf(" -D%s_ETC", p->id);
+    strupper(etc_macro);
+    for (ptr = etc_macro; (ch = *ptr); ptr++) {
+        if (ch == '/') {
+            *ptr = '_';
+        }
+    }
+    corto_buffer_append(&cmd, "%s=corto_locate(PACKAGE_ID,NULL,CORTO_LOCATION_ETC)", etc_macro);
+    free(etc_macro);
 
     if (c->symbols) {
         corto_buffer_appendstr(&cmd, " -g");
@@ -183,10 +207,10 @@ void compile_src(
 static
 void obj_deps(
     bake_language *l,
-    bake_project *p, 
-    bake_config *c,    
-    char *source, 
-    char *target, 
+    bake_project *p,
+    bake_config *c,
+    char *source,
+    char *target,
     void *ctx)
 {
 
@@ -195,10 +219,10 @@ void obj_deps(
 static
 void link_binary(
     bake_language *l,
-    bake_project *p, 
-    bake_config *c,    
-    char *source, 
-    char *target, 
+    bake_project *p,
+    bake_config *c,
+    char *source,
+    char *target,
     void *ctx)
 {
     corto_buffer cmd = CORTO_BUFFER_INIT;
@@ -253,6 +277,28 @@ char* artefact_name(
     }
 }
 
+static void clean(
+    bake_language *l,
+    bake_project *p)
+{
+    if (p->managed) {
+        p->clean("include/_project.h");
+        if (p->model) {
+            p->clean("include/_type.h");
+            p->clean("include/_load.h");
+            p->clean("include/_interface.h");
+        }
+    }
+}
+
+bool project_is_managed(bake_project *p) {
+    return p->managed;
+}
+
+bool project_has_model(bake_project *p) {
+    return p->model != NULL;
+}
+
 /* -- Rules */
 int bakemain(bake_language *l) {
 
@@ -261,8 +307,13 @@ int bakemain(bake_language *l) {
     /* Create pattern that matches generated source files */
     l->pattern("gen-sources", ".corto/gen//*.c");
 
+    l->pattern("gen-sources-2", ".corto/gen//*.c");
+
+    /* Create pattern that matches files in generated binding API */
+    l->pattern("api-sources", "c/src//*.c");
+
     /* Generate rule for dynamically generating source for definition file */
-    l->rule("GENERATED-SOURCES", "$MODEL", l->target_pattern("$gen-sources"), gen_source);
+    l->rule("GENERATED-SOURCES", "$MODEL,project.json", l->target_pattern("$gen-sources,$api-sources"), gen_source);
 
     /* Create pattern that matches source files */
     l->pattern("SOURCES", "//*.c");
@@ -271,7 +322,7 @@ int bakemain(bake_language *l) {
     l->rule("deps", "$SOURCES", l->target_map(src_to_dep), generate_deps);
 
     /* Create rule for dynamically generating object files from source files */
-    l->rule("objects", "$SOURCES,$gen-sources", l->target_map(src_to_obj), compile_src);
+    l->rule("objects", "$SOURCES,$gen-sources-2", l->target_map(src_to_obj), compile_src);
 
     /* Create rule for dynamically generating dependencies for every object in
      * $objects, using the generated dependency files. */
@@ -279,6 +330,13 @@ int bakemain(bake_language *l) {
 
     /* Create rule for creating binary from objects */
     l->rule("ARTEFACT", "$objects", l->target_pattern(NULL), link_binary);
+
+    /* Add conditions to rules that are evaluated per project */
+    l->condition("GENERATED-SOURCES", project_is_managed);
+    l->condition("api-sources", project_has_model);
+
+    /* Callback that specifies files to clean */
+    l->clean(clean);
 
     /* Set callback for generating artefact name(s) */
     l->artefact(artefact_name);
