@@ -141,7 +141,7 @@ void compile_src(
 {
     corto_buffer cmd = CORTO_BUFFER_INIT;
     corto_buffer_appendstr(
-        &cmd, "gcc -Wall -pedantic -Werror -fPIC -std=c99 -D_XOPEN_SOURCE=600");
+        &cmd, "gcc -Wall -pedantic -fPIC -std=c99 -D_XOPEN_SOURCE=600");
 
     corto_buffer_append(&cmd, " -DPACKAGE_ID=\"%s\"", p->id);
 
@@ -176,6 +176,9 @@ void compile_src(
         corto_buffer_appendstr(&cmd, " -O3");
     } else {
         corto_buffer_appendstr(&cmd, " -O0");
+    }
+    if (c->strict) {
+        corto_buffer_appendstr(&cmd, " -Werror");
     }
 
     bake_project_attr *include_attr = p->get_attr("include");
