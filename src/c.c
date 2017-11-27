@@ -298,8 +298,8 @@ bool project_is_managed(bake_project *p) {
     return p->managed;
 }
 
-bool project_has_model(bake_project *p) {
-    return p->model != NULL;
+bool project_has_model_and_public(bake_project *p) {
+    return p->model != NULL && p->public;
 }
 
 /* -- Rules */
@@ -336,7 +336,7 @@ int bakemain(bake_language *l) {
 
     /* Add conditions to rules that are evaluated per project */
     l->condition("GENERATED-SOURCES", project_is_managed);
-    l->condition("api-sources", project_has_model);
+    l->condition("api-sources", project_has_model_and_public);
 
     /* Callback that specifies files to clean */
     l->clean(clean);
