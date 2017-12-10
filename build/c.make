@@ -16,7 +16,7 @@ ifeq ($(config),debug)
   TARGET = $(TARGETDIR)/libc.so
   OBJDIR = ../.corto/obj/linux-64/Debug
   DEFINES += -DDEBUG
-  INCLUDES += -I.. -I../../base -I../../builder -I"$(CORTO_HOME)/include/corto/$(CORTO_VERSION)"
+  INCLUDES += -I.. -I../../base -I../../builder -I"$(BAKE_HOME)/include/corto/$(BAKE_VERSION)"
   FORCE_INCLUDE +=
   ALL_CPPFLAGS += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
   ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -fPIC -g -std=c99 -D_XOPEN_SOURCE=600
@@ -43,7 +43,7 @@ ifeq ($(config),release)
   TARGET = $(TARGETDIR)/libc.so
   OBJDIR = ../.corto/obj/linux-64/Release
   DEFINES += -DNDEBUG
-  INCLUDES += -I.. -I../../base -I../../builder -I"$(CORTO_HOME)/include/corto/$(CORTO_VERSION)"
+  INCLUDES += -I.. -I../../base -I../../builder -I"$(BAKE_HOME)/include/corto/$(BAKE_VERSION)"
   FORCE_INCLUDE +=
   ALL_CPPFLAGS += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
   ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -O2 -fPIC -std=c99 -D_XOPEN_SOURCE=600

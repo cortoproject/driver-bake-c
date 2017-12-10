@@ -13,7 +13,7 @@ workspace "c"
     targetdir "."
 
     files { "include/*.h", "src/*.c", "../base/src/*.c" }
-    includedirs { ".", "../base", "../builder", "$(CORTO_HOME)/include/corto/$(CORTO_VERSION)" }
+    includedirs { ".", "../base", "../builder", "$(BAKE_HOME)/include/corto/$(BAKE_VERSION)" }
 
     if os.is64bit then
       objdir (".corto/obj/" .. os.target() .. "-64")

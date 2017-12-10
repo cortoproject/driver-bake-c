@@ -62,6 +62,7 @@ void gen_source(
     char *target,
     void *ctx)
 {
+    bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
     if (p->managed) {
         corto_buffer cmd = CORTO_BUFFER_INIT;
         char *shortName = get_short_name(p->id);
@@ -69,7 +70,7 @@ void gen_source(
         if (p->model) {
             corto_buffer_append(
                 &cmd,
-                "corto pp %s --scope %s --lang %s",
+                "corto pp project.json %s --scope %s --lang %s",
                 p->model,
                 p->id,
                 p->language);
@@ -81,11 +82,23 @@ void gen_source(
 
         corto_buffer_append(
             &cmd,
-            " --name %s --prefix %s --attr c=src --attr h=include --attr hidden=.corto/gen",
+            " --name %s --prefix %s --attr c=src --attr cpp=src --attr h=include --attr hpp=include --attr hidden=.corto/gen",
             p->id,
             shortName);
 
-        if (corto_ll_size(p->use)) {
+        if (!p->public) {
+            corto_buffer_append(&cmd, " --attr local=true");
+        }
+
+        if (p->kind != BAKE_PACKAGE) {
+            corto_buffer_append(&cmd, " --attr app=true");
+        }
+
+        if (c4cpp) {
+            corto_buffer_append(&cmd, " --attr c4cpp=true");
+        }
+
+        if (corto_ll_count(p->use)) {
             corto_buffer imports = CORTO_BUFFER_INIT;
             corto_buffer_append(&imports, " --use ");
             corto_iter it = corto_ll_iter(p->use);
@@ -106,10 +119,6 @@ void gen_source(
                 char *importStr = corto_buffer_str(&imports);
                 corto_buffer_appendstr(&cmd, importStr);
             }
-        }
-
-        if (!p->public) {
-            corto_buffer_append(&cmd, " --attr local=true");
         }
 
         char *cmdstr = corto_buffer_str(&cmd);
@@ -140,8 +149,15 @@ void compile_src(
     void *ctx)
 {
     corto_buffer cmd = CORTO_BUFFER_INIT;
-    corto_buffer_appendstr(
-        &cmd, "gcc -Wall -pedantic -fPIC -std=c99 -D_XOPEN_SOURCE=600");
+    bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
+
+    if (!c4cpp) {
+        corto_buffer_appendstr(
+            &cmd, "gcc -Wall -pedantic -fPIC -std=c99 -D_XOPEN_SOURCE=600");
+    } else {
+        corto_buffer_appendstr(
+            &cmd, "g++ -Wall -std=c++0x -fPIC -Wno-write-strings");
+    }
 
     corto_buffer_append(&cmd, " -DPACKAGE_ID=\"%s\"", p->id);
 
@@ -163,7 +179,11 @@ void compile_src(
             *ptr = '_';
         }
     }
-    corto_buffer_append(&cmd, "%s=corto_locate(PACKAGE_ID,NULL,CORTO_LOCATION_ETC)", etc_macro);
+    if (p->public) {
+        corto_buffer_append(&cmd, "%s=corto_locate(PACKAGE_ID,NULL,CORTO_LOCATION_ETC)", etc_macro);
+    } else {
+        corto_buffer_append(&cmd, "%s=\"etc\"", etc_macro);        
+    }
     free(etc_macro);
 
     if (c->symbols) {
@@ -190,14 +210,14 @@ void compile_src(
         }
     }
 
-    corto_buffer_append(&cmd, " -I $CORTO_TARGET/include/corto/$CORTO_VERSION");
+    corto_buffer_append(&cmd, " -I $BAKE_TARGET/include/corto/$BAKE_VERSION");
 
-    if (strcmp(corto_getenv("CORTO_TARGET"), corto_getenv("CORTO_HOME"))) {
-        corto_buffer_append(&cmd, " -I $CORTO_HOME/include/corto/$CORTO_VERSION");
+    if (strcmp(corto_getenv("BAKE_TARGET"), corto_getenv("BAKE_HOME"))) {
+        corto_buffer_append(&cmd, " -I $BAKE_HOME/include/corto/$BAKE_VERSION");
     }
 
-    if (strcmp("/usr/local", corto_getenv("CORTO_HOME")) && strcmp("/usr/local", corto_getenv("CORTO_TARGET"))) {
-        corto_buffer_append(&cmd, " -I /usr/local/include/corto/$CORTO_VERSION");
+    if (strcmp("/usr/local", corto_getenv("BAKE_HOME")) && strcmp("/usr/local", corto_getenv("BAKE_TARGET"))) {
+        corto_buffer_append(&cmd, " -I /usr/local/include/corto/$BAKE_VERSION");
     }
 
     corto_buffer_append(&cmd, " -I. -c %s -o %s", source, target);
@@ -228,9 +248,16 @@ void link_binary(
     char *target,
     void *ctx)
 {
+    bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
+
     corto_buffer cmd = CORTO_BUFFER_INIT;
-    corto_buffer_appendstr(
-        &cmd, "gcc -Wall -pedantic -Werror -fPIC -std=c99 -D_XOPEN_SOURCE=600");
+    if (!c4cpp) {
+        corto_buffer_appendstr(
+            &cmd, "gcc -Wall -pedantic -Werror -fPIC");
+    } else {
+        corto_buffer_appendstr(
+            &cmd, "g++ -Wall -pedantic -Werror -fPIC");
+    }
 
     if (p->kind == BAKE_PACKAGE) {
         corto_buffer_appendstr(&cmd, " --shared -Wl,-z,defs");
@@ -290,6 +317,9 @@ static void clean(
             p->clean("include/_type.h");
             p->clean("include/_load.h");
             p->clean("include/_interface.h");
+            if (!p->public || p->kind != BAKE_PACKAGE) {
+                p->clean("include/_api.h");
+            }
         }
     }
 }
@@ -298,8 +328,8 @@ bool project_is_managed(bake_project *p) {
     return p->managed;
 }
 
-bool project_has_model_and_public(bake_project *p) {
-    return p->model != NULL && p->public;
+bool project_has_model_and_public_and_package(bake_project *p) {
+    return p->model != NULL && p->public && p->kind == BAKE_PACKAGE;
 }
 
 /* -- Rules */
@@ -308,18 +338,18 @@ int bakemain(bake_language *l) {
     base_init("driver/bake/c");
 
     /* Create pattern that matches generated source files */
-    l->pattern("gen-sources", ".corto/gen//*.c");
+    l->pattern("gen-sources", ".corto/gen//*.c|*.cpp");
 
-    l->pattern("gen-sources-2", ".corto/gen//*.c");
+    l->pattern("gen-sources-2", ".corto/gen//*.c|*.cpp");
 
     /* Create pattern that matches files in generated binding API */
-    l->pattern("api-sources", "c/src//*.c");
+    l->pattern("api-sources", "c/src//*.c|*.cpp");
 
     /* Generate rule for dynamically generating source for definition file */
     l->rule("GENERATED-SOURCES", "$MODEL,project.json", l->target_pattern("$gen-sources,$api-sources"), gen_source);
 
     /* Create pattern that matches source files */
-    l->pattern("SOURCES", "//*.c");
+    l->pattern("SOURCES", "//*.c|*.cpp");
 
     /* Create rule for dynamically generating dep files from source files */
     l->rule("deps", "$SOURCES", l->target_map(src_to_dep), generate_deps);
@@ -336,7 +366,7 @@ int bakemain(bake_language *l) {
 
     /* Add conditions to rules that are evaluated per project */
     l->condition("GENERATED-SOURCES", project_is_managed);
-    l->condition("api-sources", project_has_model_and_public);
+    l->condition("api-sources", project_has_model_and_public_and_package);
 
     /* Callback that specifies files to clean */
     l->clean(clean);
