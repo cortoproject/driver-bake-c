@@ -153,7 +153,7 @@ void compile_src(
 
     if (!c4cpp) {
         corto_buffer_appendstr(
-            &cmd, "gcc -Wall -pedantic -fPIC -std=c99 -D_XOPEN_SOURCE=600");
+            &cmd, "gcc -Wall -fPIC -std=c99 -D_XOPEN_SOURCE=600");
     } else {
         corto_buffer_appendstr(
             &cmd, "g++ -Wall -std=c++0x -fPIC -Wno-write-strings");
@@ -198,7 +198,7 @@ void compile_src(
         corto_buffer_appendstr(&cmd, " -O0");
     }
     if (c->strict) {
-        corto_buffer_appendstr(&cmd, " -Werror");
+        corto_buffer_appendstr(&cmd, " -Werror -pedantic");
     }
 
     bake_project_attr *include_attr = p->get_attr("include");
@@ -253,10 +253,10 @@ void link_binary(
     corto_buffer cmd = CORTO_BUFFER_INIT;
     if (!c4cpp) {
         corto_buffer_appendstr(
-            &cmd, "gcc -Wall -pedantic -Werror -fPIC");
+            &cmd, "gcc -Wall -fPIC");
     } else {
         corto_buffer_appendstr(
-            &cmd, "g++ -Wall -pedantic -Werror -fPIC");
+            &cmd, "g++ -Wall -fPIC");
     }
 
     if (p->kind == BAKE_PACKAGE) {
@@ -269,6 +269,10 @@ void link_binary(
         corto_buffer_appendstr(&cmd, " -O0");
     }
 
+    if (c->strict) {
+        corto_buffer_appendstr(&cmd, " -Werror -pedantic");
+    }
+
     corto_buffer_append(&cmd, " %s", source);
 
     bake_project_attr *lib_attr = p->get_attr("lib");
@@ -277,6 +281,15 @@ void link_binary(
         while (corto_iter_hasNext(&it)) {
             bake_project_attr *lib = corto_iter_next(&it);
             corto_buffer_append(&cmd, " -l%s", lib->is.string);
+        }
+    }
+
+    bake_project_attr *libpath_attr = p->get_attr("libpath");
+    if (lib_attr) {
+        corto_iter it = corto_ll_iter(libpath_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *lib = corto_iter_next(&it);
+            corto_buffer_append(&cmd, " -L%s", lib->is.string);
         }
     }
 
