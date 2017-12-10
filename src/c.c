@@ -3,6 +3,9 @@
 
 #define OBJ_DIR ".bake_cache/obj"
 
+#define LOCAL_INCLUDE_ALIAS "$(CORTO_INCLUDE)"
+#define LOCAL_INCLUDE_DIR_PATH "$BAKE_TARGET/include/corto/$BAKE_VERSION/%s"
+
 static
 char* get_short_name(
     char *package)
@@ -206,7 +209,12 @@ void compile_src(
         corto_iter it = corto_ll_iter(include_attr->is.array);
         while (corto_iter_hasNext(&it)) {
             bake_project_attr *include = corto_iter_next(&it);
-            corto_buffer_append(&cmd, " -I%s", include->is.string);
+            if (strcmp(include->is.string, LOCAL_INCLUDE_ALIAS)) {
+                corto_buffer_append(&cmd, " -I%s", include->is.string);
+            } else {
+                /* Support $(CORTO_INCLUDE) include path */
+                corto_buffer_append(&cmd, " -I"LOCAL_INCLUDE_DIR_PATH, p->id);
+            }
         }
     }
 
