@@ -285,7 +285,7 @@ void link_binary(
     }
 
     bake_project_attr *libpath_attr = p->get_attr("libpath");
-    if (lib_attr) {
+    if (libpath_attr) {
         corto_iter it = corto_ll_iter(libpath_attr->is.array);
         while (corto_iter_hasNext(&it)) {
             bake_project_attr *lib = corto_iter_next(&it);
