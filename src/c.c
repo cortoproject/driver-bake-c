@@ -1,7 +1,7 @@
 
 #include <bake/bake.h>
 
-#define OBJ_DIR ".corto/obj"
+#define OBJ_DIR ".bake_cache/obj"
 
 static
 char* get_short_name(
@@ -82,7 +82,7 @@ void gen_source(
 
         corto_buffer_append(
             &cmd,
-            " --name %s --prefix %s --attr c=src --attr cpp=src --attr h=include --attr hpp=include --attr hidden=.corto/gen",
+            " --name %s --prefix %s --attr c=src --attr cpp=src --attr h=include --attr hpp=include --attr hidden=.bake_cache/gen",
             p->id,
             shortName);
 
@@ -182,7 +182,7 @@ void compile_src(
     if (p->public) {
         corto_buffer_append(&cmd, "%s=corto_locate(PACKAGE_ID,NULL,CORTO_LOCATION_ETC)", etc_macro);
     } else {
-        corto_buffer_append(&cmd, "%s=\"etc\"", etc_macro);        
+        corto_buffer_append(&cmd, "%s=\"etc\"", etc_macro);
     }
     free(etc_macro);
 
@@ -338,9 +338,9 @@ int bakemain(bake_language *l) {
     base_init("driver/bake/c");
 
     /* Create pattern that matches generated source files */
-    l->pattern("gen-sources", ".corto/gen//*.c|*.cpp");
+    l->pattern("gen-sources", ".bake_cache/gen//*.c|*.cpp");
 
-    l->pattern("gen-sources-2", ".corto/gen//*.c|*.cpp");
+    l->pattern("gen-sources-2", ".bake_cache/gen//*.c|*.cpp");
 
     /* Create pattern that matches files in generated binding API */
     l->pattern("api-sources", "c/src//*.c|*.cpp");
