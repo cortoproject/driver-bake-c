@@ -359,18 +359,18 @@ int bakemain(bake_language *l) {
     base_init("driver/bake/c");
 
     /* Create pattern that matches generated source files */
-    l->pattern("gen-sources", ".bake_cache/gen//*.c|*.cpp");
+    l->pattern("gen-sources", ".bake_cache/gen//*.c|*.cpp|*.cxx");
 
-    l->pattern("gen-sources-2", ".bake_cache/gen//*.c|*.cpp");
+    l->pattern("gen-sources-2", ".bake_cache/gen//*.c|*.cpp|*.cxx");
 
     /* Create pattern that matches files in generated binding API */
-    l->pattern("api-sources", "c/src//*.c|*.cpp");
+    l->pattern("api-sources", "c/src//*.c|*.cpp|*.cxx");
 
     /* Generate rule for dynamically generating source for definition file */
     l->rule("GENERATED-SOURCES", "$MODEL,project.json", l->target_pattern("$gen-sources,$api-sources"), gen_source);
 
     /* Create pattern that matches source files */
-    l->pattern("SOURCES", "//*.c|*.cpp");
+    l->pattern("SOURCES", "//*.c|*.cpp|*.cxx");
 
     /* Create rule for dynamically generating dep files from source files */
     l->rule("deps", "$SOURCES", l->target_map(src_to_dep), generate_deps);
