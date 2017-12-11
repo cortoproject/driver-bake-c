@@ -204,6 +204,28 @@ void compile_src(
         corto_buffer_appendstr(&cmd, " -Werror -pedantic");
     }
 
+    if (!c4cpp) {
+        /* CFLAGS for c projects */
+        bake_project_attr *flags_attr = p->get_attr("cflags");
+        if (flags_attr) {
+            corto_iter it = corto_ll_iter(flags_attr->is.array);
+            while (corto_iter_hasNext(&it)) {
+                bake_project_attr *flag = corto_iter_next(&it);
+                corto_buffer_append(&cmd, " %s", flag->is.string);
+            }
+        }
+    } else {
+        /* CXXFLAGS for c4cpp projects */
+        bake_project_attr *flags_attr = p->get_attr("cxxflags");
+        if (flags_attr) {
+            corto_iter it = corto_ll_iter(flags_attr->is.array);
+            while (corto_iter_hasNext(&it)) {
+                bake_project_attr *flag = corto_iter_next(&it);
+                corto_buffer_append(&cmd, " %s", flag->is.string);
+            }
+        }
+    }
+
     bake_project_attr *include_attr = p->get_attr("include");
     if (include_attr) {
         corto_iter it = corto_ll_iter(include_attr->is.array);
