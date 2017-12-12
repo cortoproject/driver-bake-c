@@ -3,8 +3,10 @@
 
 #define OBJ_DIR ".bake_cache/obj"
 
-#define LOCAL_INCLUDE_ALIAS "$(CORTO_INCLUDE)"
-#define LOCAL_INCLUDE_DIR_PATH "$BAKE_TARGET/include/corto/$BAKE_VERSION/%s"
+#define PROJECT_INCLUDE_ALIAS "$(PROJECT_INCLUDE)"
+#define PROJECT_INCLUDE_PATH "$BAKE_TARGET/include/corto/$BAKE_VERSION/%s"
+#define PROJECT_ETC_ALIAS "$(PROJECT_ETC)"
+#define PROJECT_ETC_PATH "$BAKE_TARGET/etc/corto/$BAKE_VERSION/%s"
 
 static
 char* get_short_name(
@@ -231,12 +233,14 @@ void compile_src(
         corto_iter it = corto_ll_iter(include_attr->is.array);
         while (corto_iter_hasNext(&it)) {
             bake_project_attr *include = corto_iter_next(&it);
-            if (strcmp(include->is.string, LOCAL_INCLUDE_ALIAS)) {
-                corto_buffer_append(&cmd, " -I%s", include->is.string);
-            } else {
-                /* Support $(CORTO_INCLUDE) include path */
-                corto_buffer_append(&cmd, " -I"LOCAL_INCLUDE_DIR_PATH, p->id);
-            }
+            char* file = include->is.string;
+
+            /* Replace $(PROJECT_INCLUDE) alias */
+            char* etc = corto_asprintf(PROJECT_INCLUDE_PATH, p->id);
+            char* path = strreplace(file , PROJECT_INCLUDE_ALIAS, etc);
+            corto_buffer_append(&cmd, " -I%s", path);
+            corto_dealloc(path);
+            corto_dealloc(etc);
         }
     }
 
@@ -327,6 +331,54 @@ void link_binary(
     while (corto_iter_hasNext(&it)) {
         char *lib = corto_iter_next(&it);
         corto_buffer_append(&cmd, " %s", lib);
+    }
+
+    bake_project_attr *link_attr = p->get_attr("link");
+    if (link_attr) {
+        corto_iter it = corto_ll_iter(link_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *link = corto_iter_next(&it);
+
+            /* First attempt to find library $PATH/name */
+            char* etc = corto_asprintf(PROJECT_ETC_PATH, p->id);
+            char* target = strreplace(
+                link->is.string, PROJECT_ETC_ALIAS, etc);
+            corto_dealloc(etc);
+
+            if (corto_file_test(target)) {
+                corto_buffer_append(&cmd, " %s", target);
+                corto_dealloc(target);
+                continue;
+            }
+
+            /* Second, attempt to find library $PATH/libname.so */
+            /* Parse Library Name */
+            char* libName = strrchr(target, '/');
+            if (!libName) {
+                /* "/" Substring Not Found */
+                continue;
+            }
+
+            /* Parse Path */
+            size_t pathLength = strlen(target) - strlen(libName);
+            char path[pathLength+1];
+            strncpy(path, target, pathLength);
+            path[pathLength] = '\0';
+            libName++;
+
+            /* Verify $Path/libName.so exists */
+            char* lib = corto_asprintf("%s/lib%s.so", path, libName);
+            corto_dealloc(target);
+            if (corto_file_test(lib)) {
+                corto_buffer_append(&cmd, " %s", lib);
+                corto_dealloc(lib);
+                continue;
+            }
+
+            corto_throw("Failed to resolve [%s] library", lib);
+            corto_dealloc(lib);
+
+        }
     }
 
     corto_buffer_append(&cmd, " -o %s", target);
