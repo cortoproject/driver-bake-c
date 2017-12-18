@@ -251,10 +251,6 @@ void compile_src(
         corto_buffer_append(&cmd, " -I $BAKE_HOME/include/corto/$BAKE_VERSION");
     }
 
-    if (strcmp("/usr/local", corto_getenv("BAKE_HOME")) && strcmp("/usr/local", corto_getenv("BAKE_TARGET"))) {
-        corto_buffer_append(&cmd, " -I /usr/local/include/corto/$BAKE_VERSION");
-    }
-
     corto_buffer_append(&cmd, " -I. -c %s -o %s", source, target);
 
     char *cmdstr = corto_buffer_str(&cmd);
