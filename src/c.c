@@ -146,6 +146,22 @@ void generate_deps(
 }
 
 static
+const char *cc(
+    bake_project *p)
+{
+    bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
+    if (!strcmp(CORTO_OS_STRING, "linux")) {
+        if (c4cpp) {
+            return "g++";
+        } else {
+            return "gcc";
+        }
+    } else {
+        return "clang";
+    }
+}
+
+static
 void compile_src(
     bake_language *l,
     bake_project *p,
@@ -157,13 +173,8 @@ void compile_src(
     corto_buffer cmd = CORTO_BUFFER_INIT;
     bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
 
-    if (!c4cpp) {
-        corto_buffer_appendstr(
-            &cmd, "gcc -Wall -fPIC -std=c99 -D_XOPEN_SOURCE=600");
-    } else {
-        corto_buffer_appendstr(
-            &cmd, "g++ -Wall -std=c++0x -fPIC -Wno-write-strings");
-    }
+    corto_buffer_append(
+        &cmd, "%s -Wall -fPIC -std=c99 -D_XOPEN_SOURCE=600", cc(p));
 
     corto_buffer_append(&cmd, " -DPACKAGE_ID=\"%s\"", p->id);
 
@@ -296,13 +307,7 @@ void link_binary(
     bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
 
     corto_buffer cmd = CORTO_BUFFER_INIT;
-    if (!c4cpp) {
-        corto_buffer_appendstr(
-            &cmd, "gcc -Wall -fPIC");
-    } else {
-        corto_buffer_appendstr(
-            &cmd, "g++ -Wall -fPIC");
-    }
+    corto_buffer_append(&cmd, "%s -Wall -fPIC", cc(p));
 
     if (p->kind == BAKE_PACKAGE) {
         corto_buffer_appendstr(&cmd, " --shared");
@@ -394,7 +399,24 @@ void link_binary(
 
             corto_throw("Failed to resolve [%s] library", lib);
             corto_dealloc(lib);
+        }
+    }
 
+    /* Set the correct library path on OSX */
+    if (p->kind == BAKE_PACKAGE) {
+        if (!strcmp(CORTO_OS_STRING, "darwin")) {
+            char *install_name = strrchr(target, '/');
+            if (install_name) {
+                install_name ++;
+            } else {
+                install_name = target;
+            }
+            install_name = corto_envparse(
+                "$BAKE_TARGET/lib/corto/$BAKE_VERSION/%s/%s",
+                p->id,
+                install_name);
+            corto_buffer_append(&cmd, " -install_name %s", install_name);
+            free(install_name);
         }
     }
 
