@@ -14,7 +14,7 @@ ifeq ($(config),debug)
   RESCOMP = windres
   TARGETDIR = ..
   TARGET = $(TARGETDIR)/libc.so
-  OBJDIR = ../.corto/obj/linux-64/Debug
+  OBJDIR = ../.bake_cache/debug
   DEFINES += -DDEBUG
   INCLUDES += -I.. -I../../base -I../../builder -I"$(BAKE_HOME)/include/corto/$(BAKE_VERSION)"
   FORCE_INCLUDE +=
@@ -41,7 +41,7 @@ ifeq ($(config),release)
   RESCOMP = windres
   TARGETDIR = ..
   TARGET = $(TARGETDIR)/libc.so
-  OBJDIR = ../.corto/obj/linux-64/Release
+  OBJDIR = ../.bake_cache/release
   DEFINES += -DNDEBUG
   INCLUDES += -I.. -I../../base -I../../builder -I"$(BAKE_HOME)/include/corto/$(BAKE_VERSION)"
   FORCE_INCLUDE +=

@@ -1,6 +1,6 @@
 
 workspace "c"
-  configurations { "Debug", "Release" }
+  configurations { "debug", "release" }
   location "build"
 
   configuration { "linux", "gmake" }
@@ -12,23 +12,21 @@ workspace "c"
     location "build"
     targetdir "."
 
+    objdir ".bake_cache"
+
     files { "include/*.h", "src/*.c", "../base/src/*.c" }
     includedirs { ".", "../base", "../builder", "$(BAKE_HOME)/include/corto/$(BAKE_VERSION)" }
 
-    if os.is64bit then
-      objdir (".corto/obj/" .. os.target() .. "-64")
-    else
-      objdir (".corto/obj/" .. os.target() .. "-32")
-    end
-
     configuration "linux"
-      links { "rt", "dl", "m", "ffi", "pthread" }    
+      links { "rt", "dl", "m", "ffi", "pthread" }
 
-    configuration "Debug"
+    configuration "macosx"
+      links { "dl", "m", "ffi", "pthread" }
+
+    configuration "debug"
       defines { "DEBUG" }
       symbols "On"
 
-    configuration "Release"
+    configuration "release"
       defines { "NDEBUG" }
       optimize "On"
-

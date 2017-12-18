@@ -29,8 +29,9 @@ char* src_to_obj(
     const char *in,
     void *ctx)
 {
-    char *result = malloc(strlen(in) + strlen(OBJ_DIR) + 2);
-    sprintf(result, OBJ_DIR "/%s", in);
+    const char *cfg = p->cfg->id;
+    char *result = malloc(strlen(in) + strlen(OBJ_DIR) + strlen(CORTO_PLATFORM_STRING) + strlen(cfg) + 4);
+    sprintf(result, OBJ_DIR "/%s-%s/%s", CORTO_PLATFORM_STRING, cfg, in);
     char *ext = strrchr(result, '.');
     strcpy(ext + 1, "o");
     return result;
@@ -274,6 +275,20 @@ void obj_deps(
 }
 
 static
+const char* lib_map(
+    const char *lib)
+{
+    /* On darwin, librt does not exist */
+    if (!strcmp(lib, "rt")) {
+        if (!strcmp(CORTO_OS_STRING, "darwin")) {
+            return NULL;
+        }
+    }
+
+    return lib;
+}
+
+static
 void link_binary(
     bake_language *l,
     bake_project *p,
@@ -294,7 +309,10 @@ void link_binary(
     }
 
     if (p->kind == BAKE_PACKAGE) {
-        corto_buffer_appendstr(&cmd, " --shared -Wl,-z,defs");
+        corto_buffer_appendstr(&cmd, " --shared");
+        if (!strcmp(CORTO_OS_STRING, "linux")) {
+            corto_buffer_appendstr(&cmd, " -Wl,-z,defs");
+        }
     }
 
     if (c->optimizations) {
@@ -314,7 +332,10 @@ void link_binary(
         corto_iter it = corto_ll_iter(lib_attr->is.array);
         while (corto_iter_hasNext(&it)) {
             bake_project_attr *lib = corto_iter_next(&it);
-            corto_buffer_append(&cmd, " -l%s", lib->is.string);
+            const char *mapped = lib_map(lib->is.string);
+            if (mapped) {
+                corto_buffer_append(&cmd, " -l%s", mapped);
+            }
         }
     }
 
