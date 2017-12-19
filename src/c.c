@@ -174,7 +174,13 @@ void compile_src(
     bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
 
     corto_buffer_append(
-        &cmd, "%s -Wall -fPIC -std=c99 -D_XOPEN_SOURCE=600", cc(p));
+        &cmd, "%s -Wall -fPIC", cc(p));
+
+    if (c4cpp) {
+        corto_buffer_appendstr(&cmd, " -std=c++0x -Wno-write-strings");
+    } else {
+        corto_buffer_appendstr(&cmd, " -std=c99 -D_XOPEN_SOURCE=600");
+    }
 
     corto_buffer_append(&cmd, " -DPACKAGE_ID=\"%s\"", p->id);
 
