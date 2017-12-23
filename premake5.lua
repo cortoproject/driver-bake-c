@@ -14,8 +14,8 @@ workspace "c"
 
     objdir ".bake_cache"
 
-    files { "include/*.h", "src/*.c", "../base/src/*.c" }
-    includedirs { ".", "../base", "../builder", "$(BAKE_HOME)/include/corto/$(BAKE_VERSION)" }
+    files { "include/*.h", "src/*.c", "../platform/src/*.c" }
+    includedirs { ".", "../platform", "../builder", "$(BAKE_HOME)/include/corto/$(BAKE_VERSION)" }
 
     configuration "linux"
       links { "rt", "dl", "m", "ffi", "pthread" }
