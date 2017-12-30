@@ -173,8 +173,7 @@ void compile_src(
     corto_buffer cmd = CORTO_BUFFER_INIT;
     bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
 
-    corto_buffer_append(
-        &cmd, "%s -Wall -fPIC", cc(p));
+    corto_buffer_append(&cmd, "%s -Wall -fPIC", cc(p));
 
     if (c4cpp) {
         corto_buffer_appendstr(&cmd, " -std=c++0x -Wno-write-strings");
@@ -434,6 +433,20 @@ void link_binary(
 }
 
 static
+void init(
+    bake_project *p)
+{
+    if (p->managed) {
+        p->add_build_dependency("driver/gen/c/project");
+        if (p->model) {
+            p->add_build_dependency("driver/gen/c/type");
+            p->add_build_dependency("driver/gen/c/interface");
+            p->add_build_dependency("driver/gen/c/api");
+        }
+    }
+}
+
+static
 char* artefact_name(
     bake_language *l,
     bake_project *p)
@@ -447,20 +460,17 @@ char* artefact_name(
     }
 }
 
-static void clean(
+static
+void clean(
     bake_language *l,
     bake_project *p)
 {
     if (p->managed) {
         p->clean("include/_project.h");
-        if (p->model) {
-            p->clean("include/_type.h");
-            p->clean("include/_load.h");
-            p->clean("include/_interface.h");
-            if (!p->public || p->kind != BAKE_PACKAGE) {
-                p->clean("include/_api.h");
-            }
-        }
+        p->clean("include/_type.h");
+        p->clean("include/_load.h");
+        p->clean("include/_interface.h");
+        p->clean("include/_api.h");
     }
 }
 
@@ -475,7 +485,11 @@ bool project_has_model_and_public_and_package(bake_project *p) {
 /* -- Rules */
 int bakemain(bake_language *l) {
 
-    base_init("driver/bake/c");
+    /* Because the c driver is used to bootstrap build the corto package, it cannot
+     * link with corto itself. Therefore, the driver is compiled with the
+     * platform sources, that need to be manually initialized here. New language
+     * bindings don't have this bootstrap problem and can use the corto package */
+    platform_init("driver/bake/c");
 
     /* Create pattern that matches generated source files */
     l->pattern("gen-sources", ".bake_cache/gen//*.c|*.cpp|*.cxx");
@@ -507,6 +521,9 @@ int bakemain(bake_language *l) {
     /* Add conditions to rules that are evaluated per project */
     l->condition("GENERATED-SOURCES", project_is_managed);
     l->condition("api-sources", project_has_model_and_public_and_package);
+
+    /* Callback that initializes projects with the right build dependencies */
+    l->init(init);
 
     /* Callback that specifies files to clean */
     l->clean(clean);
