@@ -438,9 +438,9 @@ void init(
 {
     if (p->managed) {
         p->add_build_dependency("driver/gen/c/project");
+        p->add_build_dependency("driver/gen/c/interface");
         if (p->model) {
             p->add_build_dependency("driver/gen/c/type");
-            p->add_build_dependency("driver/gen/c/interface");
             p->add_build_dependency("driver/gen/c/api");
         }
     }
