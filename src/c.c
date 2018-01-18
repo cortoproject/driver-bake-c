@@ -72,13 +72,19 @@ void gen_source(
     if (p->managed) {
         corto_buffer cmd = CORTO_BUFFER_INIT;
         char *shortName = get_short_name(p->id);
+        char *scope = p->id;
+        char *scope_attr = p->get_attr_string("scope");
+
+        if (strlen(scope_attr)) {
+            scope = scope_attr;
+        }
 
         if (p->model) {
             corto_buffer_append(
                 &cmd,
                 "corto pp project.json %s --scope %s --lang %s",
                 p->model,
-                p->id,
+                scope,
                 p->language);
         } else {
             corto_buffer_append(
@@ -220,7 +226,7 @@ void compile_src(
         corto_buffer_appendstr(&cmd, " -O0");
     }
     if (c->strict) {
-        corto_buffer_appendstr(&cmd, " -Werror -pedantic");
+        corto_buffer_appendstr(&cmd, " -Werror -Wextra -pedantic");
     }
 
     if (!c4cpp) {
@@ -313,6 +319,10 @@ void link_binary(
 
     corto_buffer cmd = CORTO_BUFFER_INIT;
     corto_buffer_append(&cmd, "%s -Wall -fPIC", cc(p));
+
+    if (p->managed) {
+        corto_buffer_appendstr(&cmd, " -fvisibility=hidden");
+    }
 
     if (p->kind == BAKE_PACKAGE) {
         corto_buffer_appendstr(&cmd, " --shared");
