@@ -208,7 +208,7 @@ void compile_src(
         }
     }
     if (p->public) {
-        corto_buffer_append(&cmd, "%s=corto_locate(PACKAGE_ID,NULL,CORTO_LOCATION_ETC)", etc_macro);
+        corto_buffer_append(&cmd, "%s=corto_locate(PACKAGE_ID,NULL,CORTO_LOCATE_ETC)", etc_macro);
     } else {
         corto_buffer_append(&cmd, "%s=\"etc\"", etc_macro);
     }
