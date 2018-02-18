@@ -94,9 +94,8 @@ void gen_source(
 
         corto_buffer_append(
             &cmd,
-            " --name %s --prefix %s --attr c=src --attr cpp=src --attr h=include --attr hpp=include --attr hidden=.bake_cache/gen",
-            p->id,
-            shortName);
+            " --name %s --attr c=src --attr cpp=src --attr h=include --attr hpp=include --attr hidden=.bake_cache/gen",
+            p->id);
 
         if (!p->public) {
             corto_buffer_append(&cmd, " --attr local=true");
@@ -189,7 +188,7 @@ void compile_src(
 
     corto_buffer_append(&cmd, " -DPACKAGE_ID=\"%s\"", p->id);
 
-    char *building_macro = corto_asprintf(" -DBUILDING_%s", p->id);
+    char *building_macro = corto_asprintf(" -D%s_IMPL", p->id);
     strupper(building_macro);
     char *ptr, ch;
     for (ptr = building_macro; (ch = *ptr); ptr++) {
@@ -481,6 +480,8 @@ void clean(
         p->clean("include/_load.h");
         p->clean("include/_interface.h");
         p->clean("include/_api.h");
+        p->clean("include/_binding.h");
+        p->clean("include/.prefix");
     }
 }
 
