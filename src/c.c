@@ -176,11 +176,17 @@ void compile_src(
     void *ctx)
 {
     corto_buffer cmd = CORTO_BUFFER_INIT;
+    char *ext = strrchr(source, '.');
+    bool isCpp = false;
     bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
+    if (c4cpp || (ext && strcmp(ext, ".c"))) {
+        /* If extension is not c, it is a C++ file */
+        isCpp = true;
+    }
 
     corto_buffer_append(&cmd, "%s -Wall -fPIC", cc(p));
 
-    if (c4cpp) {
+    if (isCpp) {
         corto_buffer_appendstr(&cmd, " -std=c++0x -Wno-write-strings");
     } else {
         corto_buffer_appendstr(&cmd, " -std=c99 -D_XOPEN_SOURCE=600");
@@ -228,7 +234,7 @@ void compile_src(
         corto_buffer_appendstr(&cmd, " -Werror -Wextra -pedantic");
     }
 
-    if (!c4cpp) {
+    if (!isCpp) {
         /* CFLAGS for c projects */
         bake_project_attr *flags_attr = p->get_attr("cflags");
         if (flags_attr) {
