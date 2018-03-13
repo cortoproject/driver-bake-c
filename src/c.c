@@ -457,6 +457,7 @@ void init(
         if (p->model) {
             p->add_build_dependency("driver/gen/c/type");
             p->add_build_dependency("driver/gen/c/api");
+            p->add_build_dependency("driver/gen/c/cpp");
         }
     }
 }
