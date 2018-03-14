@@ -116,8 +116,11 @@ void gen_source(
             int count = 0;
             while (corto_iter_hasNext(&it)) {
                 char *use = corto_iter_next(&it);
-                if (!strcmp(use, strarg("%s/c", p->id))) {
-                  /* No need to explicitly add own /c package */
+                if (!strcmp(use, strarg("%s/c", p->id)) ||
+                    !strcmp(use, strarg("%s/cpp", p->id)))
+                {
+                  /* Should not add own generated language packages because they
+                   * may not yet exist */
                   continue;
                 }
                 if (count) {
