@@ -349,6 +349,16 @@ void link_binary(
         corto_buffer_appendstr(&cmd, " -Werror -pedantic");
     }
 
+    /* LDFLAGS */
+    bake_project_attr *flags_attr = p->get_attr("ldflags");
+    if (flags_attr) {
+        corto_iter it = corto_ll_iter(flags_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *flag = corto_iter_next(&it);
+            corto_buffer_append(&cmd, " %s", flag->is.string);
+        }
+    }
+
     corto_buffer_append(&cmd, " %s", source);
 
     bake_project_attr *lib_attr = p->get_attr("lib");
