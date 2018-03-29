@@ -510,7 +510,7 @@ int bakemain(bake_language *l) {
      * link with corto itself. Therefore, the driver is compiled with the
      * platform sources, that need to be manually initialized here. New language
      * bindings don't have this bootstrap problem and can use the corto package */
-    platform_init("driver/bake/c");
+    corto_platform_init("driver/bake/c");
 
     /* Create pattern that matches generated source files */
     l->pattern("gen-sources", ".bake_cache/gen//*.c|*.cpp|*.cxx");
