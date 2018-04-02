@@ -165,7 +165,11 @@ const char *cc(
             return "gcc";
         }
     } else {
-        return "clang";
+        if (c4cpp) {
+            return "clang++";
+        } else {
+            return "clang";
+        }
     }
 }
 
