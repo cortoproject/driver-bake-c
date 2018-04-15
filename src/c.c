@@ -154,11 +154,20 @@ void generate_deps(
 }
 
 static
+bool is_darwin(void)
+{
+    if (strcmp(CORTO_OS_STRING, "darwin")) {
+        return false;
+    }
+    return true;
+}
+
+static
 const char *cc(
     bake_project *p)
 {
     bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
-    if (!strcmp(CORTO_OS_STRING, "linux")) {
+    if (!is_darwin()) {
         if (c4cpp) {
             return "g++";
         } else {
@@ -310,12 +319,28 @@ const char* lib_map(
 {
     /* On darwin, librt does not exist */
     if (!strcmp(lib, "rt")) {
-        if (!strcmp(CORTO_OS_STRING, "darwin")) {
+        if (is_darwin()) {
             return NULL;
         }
     }
 
     return lib;
+}
+
+static
+bool is_dylib(
+    bake_project *p)
+{
+    if (is_darwin()) {
+        bool dylib = false;
+        bake_project_attr *dylib_attr = p->get_attr("dylib");
+        if (dylib_attr) {
+            dylib = dylib_attr->is.boolean;
+        }
+        return dylib;
+    } else {
+        return false;
+    }
 }
 
 static
@@ -338,7 +363,7 @@ void link_binary(
 
     if (p->kind == BAKE_PACKAGE) {
         corto_buffer_appendstr(&cmd, " --shared");
-        if (!strcmp(CORTO_OS_STRING, "linux")) {
+        if (!is_darwin()) {
             corto_buffer_appendstr(&cmd, " -Wl,-z,defs");
         }
     }
@@ -351,6 +376,10 @@ void link_binary(
 
     if (c->strict) {
         corto_buffer_appendstr(&cmd, " -Werror -pedantic");
+    }
+
+    if (is_dylib(p)) {
+        corto_buffer_appendstr(&cmd, " -dynamiclib");
     }
 
     /* LDFLAGS */
@@ -383,6 +412,11 @@ void link_binary(
         while (corto_iter_hasNext(&it)) {
             bake_project_attr *lib = corto_iter_next(&it);
             corto_buffer_append(&cmd, " -L%s", lib->is.string);
+
+            if (is_darwin()) {
+                corto_buffer_append(
+                    &cmd, " -Xlinker -rpath -Xlinker %s", lib->is.string);
+            }
         }
     }
 
@@ -439,9 +473,22 @@ void link_binary(
         }
     }
 
+    /* If on OSX, provide a few 'sensible' options for rpath because god forbid
+     * somebody might use it. */
+    if (is_darwin()) {
+        corto_buffer_append(
+            &cmd, " -Xlinker -rpath -Xlinker @loader_path");
+
+        corto_buffer_append(
+            &cmd, " -Xlinker -rpath -Xlinker @executable_path");
+
+        corto_buffer_append(
+            &cmd, " -Xlinker -rpath -Xlinker @executable_path");
+    }
+
     /* Set the correct library path on OSX */
     if (p->kind == BAKE_PACKAGE) {
-        if (!strcmp(CORTO_OS_STRING, "darwin")) {
+        if (is_darwin()) {
             char *install_name = strrchr(target, '/');
             if (install_name) {
                 install_name ++;
@@ -487,7 +534,11 @@ char* artefact_name(
     char *base = get_short_name(p->id);
 
     if (p->kind == BAKE_PACKAGE) {
-        return corto_asprintf("lib%s.so", base);
+        if (is_dylib(p)) {
+            return corto_asprintf("lib%s.dylib", base);
+        } else {
+            return corto_asprintf("lib%s.so", base);
+        }
     } else {
         return corto_strdup(base);
     }
