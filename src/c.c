@@ -10,11 +10,11 @@
 
 static
 char* get_short_name(
-    char *package)
+    const char *package)
 {
     char *result = strrchr(package, '/');
     if (!result) {
-        result = package;
+        result = (char*)package;
     } else {
         result ++;
     }
@@ -527,6 +527,105 @@ void init(
 }
 
 static
+void clean(
+    bake_language *l,
+    bake_project *p)
+{
+    if (p->managed) {
+        p->clean("include/_project.h");
+        p->clean("include/_type.h");
+        p->clean("include/_load.h");
+        p->clean("include/_interface.h");
+        p->clean("include/_api.h");
+        p->clean("include/_binding.h");
+        p->clean("include/.prefix");
+    }
+}
+
+static
+int16_t setup_project(
+    bake_language *l,
+    const char *id,
+    bake_project_kind kind)
+{
+    /* Get short project id */
+    const char *short_id = get_short_name(id);
+
+    /* Create directories */
+    corto_mkdir("src");
+    corto_mkdir("include");
+
+    /* Create project.json */
+    FILE *f = fopen("project.json", "w");
+    fprintf(f,
+        "{\n"
+        "    \"id\":\"%s\",\n"
+        "    \"type\":\"%s\"\n"
+        "}\n",
+        id,
+        kind == BAKE_APPLICATION
+            ? "executable"
+            : "library"
+    );
+    fclose(f);
+
+    /* Create main source file */
+    char *source_filename = corto_asprintf("src/%s.c", short_id);
+    f = fopen(source_filename, "w");
+    if (kind != BAKE_PACKAGE) {
+        fprintf(f,
+            "#include <include/%s.h>\n"
+            "\n"
+            "int main(int argc, char *argv[]) {\n"
+            "    return 0;\n"
+            "}\n",
+            short_id
+        );
+    } else {
+        fprintf(f,
+            "#include <include/%s.h>\n"
+            "\n",
+            short_id
+        );
+    }
+    fclose(f);
+    free(source_filename);
+
+    /* Create upper-case id for defines in header file */
+    char *id_upper = strdup(id);
+    strupper(id_upper);
+    char *ptr, ch;
+    for (ptr = id_upper; (ch = *ptr); ptr ++) {
+        if (ch == '/') {
+            ptr[0] = '_';
+        }
+    }
+
+    /* Create main header file */
+    char *header_filename = corto_asprintf("include/%s.h", short_id);
+    f = fopen(header_filename, "w");
+    fprintf(f,
+        "#ifndef %s_H\n"
+        "#define %s_H\n"
+        "\n"
+        "#ifdef __cplusplus\n"
+        "extern \"c\" {\n"
+        "#endif\n"
+        "\n"
+        "#ifdef __cplusplus\n"
+        "}\n"
+        "#endif\n"
+        "\n"
+        "#endif\n"
+        "\n",
+        id_upper,
+        id_upper
+    );
+
+    return 0;
+}
+
+static
 char* artefact_name(
     bake_language *l,
     bake_project *p)
@@ -545,25 +644,11 @@ char* artefact_name(
 }
 
 static
-void clean(
-    bake_language *l,
-    bake_project *p)
-{
-    if (p->managed) {
-        p->clean("include/_project.h");
-        p->clean("include/_type.h");
-        p->clean("include/_load.h");
-        p->clean("include/_interface.h");
-        p->clean("include/_api.h");
-        p->clean("include/_binding.h");
-        p->clean("include/.prefix");
-    }
-}
-
 bool project_is_managed(bake_project *p) {
     return p->managed;
 }
 
+static
 bool project_has_model_and_public_and_package(bake_project *p) {
     return p->model != NULL && p->public && p->kind == BAKE_PACKAGE;
 }
@@ -614,8 +699,11 @@ int bakemain(bake_language *l) {
     /* Callback that specifies files to clean */
     l->clean(clean);
 
-    /* Set callback for generating artefact name(s) */
+    /* Callback for generating artefact name(s) */
     l->artefact(artefact_name);
+
+    /* Callback for setting up a project */
+    l->setup_project(setup_project);
 
     return 0;
 }
