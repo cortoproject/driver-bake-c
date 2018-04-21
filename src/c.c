@@ -135,6 +135,25 @@ void gen_source(
             }
         }
 
+        if (corto_ll_count(p->use_private)) {
+            corto_buffer imports = CORTO_BUFFER_INIT;
+            corto_buffer_append(&imports, " --use-private ");
+            corto_iter it = corto_ll_iter(p->use_private);
+            int count = 0;
+            while (corto_iter_hasNext(&it)) {
+                char *use = corto_iter_next(&it);
+                if (count) {
+                    corto_buffer_append(&imports, ",");
+                }
+                corto_buffer_appendstr(&imports, use);
+                count ++;
+            }
+            if (count) {
+                char *importStr = corto_buffer_str(&imports);
+                corto_buffer_appendstr(&cmd, importStr);
+            }
+        }
+
         char *cmdstr = corto_buffer_str(&cmd);
         l->exec(cmdstr);
         free(cmdstr);
