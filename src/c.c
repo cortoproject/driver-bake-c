@@ -362,43 +362,54 @@ bool is_dylib(
     }
 }
 
+/*
+"link": ["my/path/to/foo"],
+"lib": ["bar"],
+"use": ["corto", "hello/world"]
+
+link <= corto_locate("corto", ...)
+
+normal: gcc main.c libfoo.so $BAKE_HOME/corto/2.0/corto/libcorto.so -lbar
+standalone: gcc main.c libfoo.so -lcorto -lhello_world -lbar
+*/
+
 static
-void link_binary(
+void setup_link_cmd(
     bake_language *l,
     bake_project *p,
     bake_config *c,
     char *source,
     char *target,
-    void *ctx)
+    void *ctx,
+    corto_buffer *cmd)
 {
     bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
 
-    corto_buffer cmd = CORTO_BUFFER_INIT;
-    corto_buffer_append(&cmd, "%s -Wall -fPIC", cc(p));
+    corto_buffer_append(cmd, "%s -Wall -fPIC", cc(p));
 
     if (p->managed) {
-        corto_buffer_appendstr(&cmd, " -fvisibility=hidden");
+        corto_buffer_appendstr(cmd, " -fvisibility=hidden");
     }
 
     if (p->kind == BAKE_PACKAGE) {
-        corto_buffer_appendstr(&cmd, " --shared");
+        corto_buffer_appendstr(cmd, " --shared");
         if (!is_darwin()) {
-            corto_buffer_appendstr(&cmd, " -Wl,-z,defs");
+            corto_buffer_appendstr(cmd, " -Wl,-z,defs");
         }
     }
 
     if (c->optimizations) {
-        corto_buffer_appendstr(&cmd, " -O3");
+        corto_buffer_appendstr(cmd, " -O3");
     } else {
-        corto_buffer_appendstr(&cmd, " -O0");
+        corto_buffer_appendstr(cmd, " -O0");
     }
 
     if (c->strict) {
-        corto_buffer_appendstr(&cmd, " -Werror -pedantic");
+        corto_buffer_appendstr(cmd, " -Werror -pedantic");
     }
 
     if (is_dylib(p)) {
-        corto_buffer_appendstr(&cmd, " -dynamiclib");
+        corto_buffer_appendstr(cmd, " -dynamiclib");
     }
 
     /* LDFLAGS */
@@ -407,11 +418,11 @@ void link_binary(
         corto_iter it = corto_ll_iter(flags_attr->is.array);
         while (corto_iter_hasNext(&it)) {
             bake_project_attr *flag = corto_iter_next(&it);
-            corto_buffer_append(&cmd, " %s", flag->is.string);
+            corto_buffer_append(cmd, " %s", flag->is.string);
         }
     }
 
-    corto_buffer_append(&cmd, " %s", source);
+    corto_buffer_append(cmd, " %s", source);
 
     bake_project_attr *lib_attr = p->get_attr("lib");
     if (lib_attr) {
@@ -420,7 +431,7 @@ void link_binary(
             bake_project_attr *lib = corto_iter_next(&it);
             const char *mapped = lib_map(lib->is.string);
             if (mapped) {
-                corto_buffer_append(&cmd, " -l%s", mapped);
+                corto_buffer_append(cmd, " -l%s", mapped);
             }
         }
     }
@@ -430,66 +441,33 @@ void link_binary(
         corto_iter it = corto_ll_iter(libpath_attr->is.array);
         while (corto_iter_hasNext(&it)) {
             bake_project_attr *lib = corto_iter_next(&it);
-            corto_buffer_append(&cmd, " -L%s", lib->is.string);
+            corto_buffer_append(cmd, " -L%s", lib->is.string);
 
             if (is_darwin()) {
                 corto_buffer_append(
-                    &cmd, " -Xlinker -rpath -Xlinker %s", lib->is.string);
+                    cmd, " -Xlinker -rpath -Xlinker %s", lib->is.string);
             }
         }
     }
+}
+
+static
+void link_binary(
+    bake_language *l,
+    bake_project *p,
+    bake_config *c,
+    char *source,
+    char *target,
+    void *ctx)
+{
+    corto_buffer cmd = CORTO_BUFFER_INIT;
+
+    setup_link_cmd(l, p, c, source, target, ctx, &cmd);
 
     corto_iter it = corto_ll_iter(p->link);
     while (corto_iter_hasNext(&it)) {
         char *lib = corto_iter_next(&it);
         corto_buffer_append(&cmd, " %s", lib);
-    }
-
-    bake_project_attr *link_attr = p->get_attr("link");
-    if (link_attr) {
-        corto_iter it = corto_ll_iter(link_attr->is.array);
-        while (corto_iter_hasNext(&it)) {
-            bake_project_attr *link = corto_iter_next(&it);
-
-            /* First attempt to find library $PATH/name */
-            char* etc = corto_asprintf(PROJECT_ETC_PATH, p->id);
-            char* target = strreplace(
-                link->is.string, PROJECT_ETC_ALIAS, etc);
-            corto_dealloc(etc);
-
-            if (corto_file_test(target)) {
-                corto_buffer_append(&cmd, " %s", target);
-                corto_dealloc(target);
-                continue;
-            }
-
-            /* Second, attempt to find library $PATH/libname.so */
-            /* Parse Library Name */
-            char* libName = strrchr(target, '/');
-            if (!libName) {
-                /* "/" Substring Not Found */
-                continue;
-            }
-
-            /* Parse Path */
-            size_t pathLength = strlen(target) - strlen(libName);
-            char path[pathLength+1];
-            strncpy(path, target, pathLength);
-            path[pathLength] = '\0';
-            libName++;
-
-            /* Verify $Path/libName.so exists */
-            char* lib = corto_asprintf("%s/lib%s.so", path, libName);
-            corto_dealloc(target);
-            if (corto_file_test(lib)) {
-                corto_buffer_append(&cmd, " %s", lib);
-                corto_dealloc(lib);
-                continue;
-            }
-
-            corto_throw("Failed to resolve [%s] library", lib);
-            corto_dealloc(lib);
-        }
     }
 
     /* If on OSX, provide a few 'sensible' options for rpath because god forbid
@@ -522,6 +500,25 @@ void link_binary(
             free(install_name);
         }
     }
+
+    corto_buffer_append(&cmd, " -o %s", target);
+
+    char *cmdstr = corto_buffer_str(&cmd);
+    l->exec(cmdstr);
+    free(cmdstr);
+}
+
+static
+void link_standalone(
+    bake_language *l,
+    bake_project *p,
+    bake_config *c,
+    char *source,
+    char *target,
+    void *ctx)
+{
+    corto_buffer cmd = CORTO_BUFFER_INIT;
+    setup_link_cmd(l, p, c, source, target, ctx, &cmd);
 
     corto_buffer_append(&cmd, " -o %s", target);
 
@@ -664,6 +661,32 @@ char* artefact_name(
 }
 
 static
+char* standalone_artefact_name(
+    bake_language *l,
+    bake_project *p)
+{
+    char *id = corto_strdup(p->id);
+    char *ptr, ch;
+    for (ptr = id; (ch = *ptr); ptr++) {
+        if (ch == '/') {
+            *ptr = '_';
+        }
+    }
+
+    if (p->kind == BAKE_PACKAGE) {
+        if (is_dylib(p)) {
+            return corto_asprintf("lib%s.dylib", id);
+        } else {
+            return corto_asprintf("lib%s.so", id);
+        }
+    } else {
+        return corto_strdup(id);
+    }
+    
+    free(id);
+}
+
+static
 bool project_is_managed(bake_project *p) {
     return p->managed;
 }
@@ -709,6 +732,9 @@ int bakemain(bake_language *l) {
     /* Create rule for creating binary from objects */
     l->rule("ARTEFACT", "$objects", l->target_pattern(NULL), link_binary);
 
+    /* Create rule for building standalone library */
+    l->rule("STANDALONE_ARTEFACT", "$objects", l->target_pattern(NULL), link_standalone);
+
     /* Add conditions to rules that are evaluated per project */
     l->condition("GENERATED-SOURCES", project_is_managed);
     l->condition("api-sources", project_has_model_and_public_and_package);
@@ -721,6 +747,9 @@ int bakemain(bake_language *l) {
 
     /* Callback for generating artefact name(s) */
     l->artefact(artefact_name);
+
+    /* Callback for generating artefact name(s) */
+    l->standalone_artefact(standalone_artefact_name);
 
     /* Callback for setting up a project */
     l->setup_project(setup_project);
