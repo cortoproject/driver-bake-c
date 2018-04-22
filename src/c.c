@@ -556,6 +556,7 @@ void clean(
         p->clean("include/_load.h");
         p->clean("include/_interface.h");
         p->clean("include/_api.h");
+        p->clean("include/_cpp.h");
         p->clean("include/_binding.h");
         p->clean("include/.prefix");
     }
