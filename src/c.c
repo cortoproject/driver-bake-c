@@ -142,6 +142,13 @@ void gen_source(
             int count = 0;
             while (corto_iter_hasNext(&it)) {
                 char *use = corto_iter_next(&it);
+                if (!strcmp(use, strarg("%s/c", p->id)) ||
+                    !strcmp(use, strarg("%s/cpp", p->id)))
+                {
+                  /* Should not add own generated language packages because they
+                   * may not yet exist */
+                  continue;
+                }
                 if (count) {
                     corto_buffer_append(&imports, ",");
                 }
@@ -362,6 +369,60 @@ bool is_dylib(
     }
 }
 
+static
+char* artefact_name(
+    bake_language *l,
+    bake_project *p)
+{
+    char *base = get_short_name(p->id);
+
+    if (p->kind == BAKE_PACKAGE) {
+        if (is_dylib(p)) {
+            return corto_asprintf("lib%s.dylib", base);
+        } else {
+            return corto_asprintf("lib%s.so", base);
+        }
+    } else {
+        return corto_strdup(base);
+    }
+}
+
+static
+char *standalone_name(
+    const char *project_id)
+{
+    char *result = NULL;
+    char *id = corto_strdup(project_id);
+    char *ptr, ch;
+    for (ptr = id; (ch = *ptr); ptr++) {
+        if (ch == '/') {
+            *ptr = '_';
+        }
+    }
+
+    return id;
+}
+
+static
+char* standalone_artefact_name(
+    bake_language *l,
+    bake_project *p)
+{
+    char *result;
+    char *id = standalone_name(p->id);
+    if (p->kind == BAKE_PACKAGE) {
+        if (is_dylib(p)) {
+            result = corto_asprintf("lib%s.dylib", id);
+        } else {
+            result = corto_asprintf("lib%s.so", id);
+        }
+    } else {
+        result = corto_strdup(id);
+    }
+    free(id);
+    return result;
+}
+
 /*
 "link": ["my/path/to/foo"],
 "lib": ["bar"],
@@ -520,6 +581,28 @@ void link_standalone(
     corto_buffer cmd = CORTO_BUFFER_INIT;
     setup_link_cmd(l, p, c, source, target, ctx, &cmd);
 
+    corto_buffer_append(&cmd, " -L%s", c->standalone_libpath);
+
+    corto_iter it = corto_ll_iter(p->use);
+    while (corto_iter_hasNext(&it)) {
+        char *dep = corto_iter_next(&it);
+        char *standalone_lib = standalone_name(dep);
+        corto_buffer_append(&cmd, " -l%s", standalone_lib);
+    }
+
+    it = corto_ll_iter(p->use_private);
+    while (corto_iter_hasNext(&it)) {
+        char *dep = corto_iter_next(&it);
+        char *standalone_lib = standalone_name(dep);
+        corto_buffer_append(&cmd, " -l%s", standalone_lib);
+    }
+
+    it = corto_ll_iter(p->link);
+    while (corto_iter_hasNext(&it)) {
+        char *dep = corto_iter_next(&it);
+        corto_buffer_append(&cmd, " -l%s", dep);
+    }
+
     corto_buffer_append(&cmd, " -o %s", target);
 
     char *cmdstr = corto_buffer_str(&cmd);
@@ -640,50 +723,6 @@ int16_t setup_project(
     );
 
     return 0;
-}
-
-static
-char* artefact_name(
-    bake_language *l,
-    bake_project *p)
-{
-    char *base = get_short_name(p->id);
-
-    if (p->kind == BAKE_PACKAGE) {
-        if (is_dylib(p)) {
-            return corto_asprintf("lib%s.dylib", base);
-        } else {
-            return corto_asprintf("lib%s.so", base);
-        }
-    } else {
-        return corto_strdup(base);
-    }
-}
-
-static
-char* standalone_artefact_name(
-    bake_language *l,
-    bake_project *p)
-{
-    char *id = corto_strdup(p->id);
-    char *ptr, ch;
-    for (ptr = id; (ch = *ptr); ptr++) {
-        if (ch == '/') {
-            *ptr = '_';
-        }
-    }
-
-    if (p->kind == BAKE_PACKAGE) {
-        if (is_dylib(p)) {
-            return corto_asprintf("lib%s.dylib", id);
-        } else {
-            return corto_asprintf("lib%s.so", id);
-        }
-    } else {
-        return corto_strdup(id);
-    }
-    
-    free(id);
 }
 
 static
