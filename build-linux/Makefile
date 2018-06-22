@@ -9,26 +9,26 @@ ifndef verbose
 endif
 
 ifeq ($(config),debug)
-  c_config = debug
+  driver_bake_c_config = debug
 endif
 ifeq ($(config),release)
-  c_config = release
+  driver_bake_c_config = release
 endif
 
-PROJECTS := c
+PROJECTS := driver_bake_c
 
 .PHONY: all clean help $(PROJECTS) 
 
 all: $(PROJECTS)
 
-c:
-ifneq (,$(c_config))
-	@echo "==== Building c ($(c_config)) ===="
-	@${MAKE} --no-print-directory -C . -f c.make config=$(c_config)
+driver_bake_c:
+ifneq (,$(driver_bake_c_config))
+	@echo "==== Building driver_bake_c ($(driver_bake_c_config)) ===="
+	@${MAKE} --no-print-directory -C . -f driver_bake_c.make config=$(driver_bake_c_config)
 endif
 
 clean:
-	@${MAKE} --no-print-directory -C . -f c.make clean
+	@${MAKE} --no-print-directory -C . -f driver_bake_c.make clean
 
 help:
 	@echo "Usage: make [config=name] [target]"
@@ -40,6 +40,6 @@ help:
 	@echo "TARGETS:"
 	@echo "   all (default)"
 	@echo "   clean"
-	@echo "   c"
+	@echo "   driver_bake_c"
 	@echo ""
 	@echo "For more information, see http://industriousone.com/premake/quick-start"

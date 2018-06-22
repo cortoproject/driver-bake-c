@@ -3,11 +3,6 @@
 
 #define OBJ_DIR ".bake_cache/obj"
 
-#define PROJECT_INCLUDE_ALIAS "$(PROJECT_INCLUDE)"
-#define PROJECT_INCLUDE_PATH "$BAKE_TARGET/include/corto/$BAKE_VERSION/%s"
-#define PROJECT_ETC_ALIAS "$(PROJECT_ETC)"
-#define PROJECT_ETC_PATH "$BAKE_TARGET/etc/corto/$BAKE_VERSION/%s"
-
 static
 char* get_short_name(
     const char *package)
@@ -304,20 +299,14 @@ void compile_src(
         while (corto_iter_hasNext(&it)) {
             bake_project_attr *include = corto_iter_next(&it);
             char* file = include->is.string;
-
-            /* Replace $(PROJECT_INCLUDE) alias */
-            char* etc = corto_asprintf(PROJECT_INCLUDE_PATH, p->id);
-            char* path = strreplace(file , PROJECT_INCLUDE_ALIAS, etc);
-            corto_buffer_append(&cmd, " -I%s", path);
-            corto_dealloc(path);
-            corto_dealloc(etc);
+            corto_buffer_append(&cmd, " -I%s", file);
         }
     }
 
-    corto_buffer_append(&cmd, " -I $BAKE_TARGET/include/corto/$BAKE_VERSION");
+    corto_buffer_append(&cmd, " -I %s/include", c->rootpath);
 
     if (strcmp(corto_getenv("BAKE_TARGET"), corto_getenv("BAKE_HOME"))) {
-        corto_buffer_append(&cmd, " -I $BAKE_HOME/include/corto/$BAKE_VERSION");
+        corto_buffer_append(&cmd, " -I %s/include", c->homepath);
     }
 
     corto_buffer_append(&cmd, " -I. -c %s -o %s", source, target);
@@ -370,25 +359,7 @@ bool is_dylib(
 }
 
 static
-char* artefact_name(
-    bake_language *l,
-    bake_project *p)
-{
-    char *base = get_short_name(p->id);
-
-    if (p->kind == BAKE_PACKAGE) {
-        if (is_dylib(p)) {
-            return corto_asprintf("lib%s.dylib", base);
-        } else {
-            return corto_asprintf("lib%s.so", base);
-        }
-    } else {
-        return corto_strdup(base);
-    }
-}
-
-static
-char *standalone_name(
+char *project_name(
     const char *project_id)
 {
     char *result = NULL;
@@ -404,12 +375,12 @@ char *standalone_name(
 }
 
 static
-char* standalone_artefact_name(
+char* artefact_name(
     bake_language *l,
     bake_project *p)
 {
     char *result;
-    char *id = standalone_name(p->id);
+    char *id = project_name(p->id);
     if (p->kind == BAKE_PACKAGE) {
         if (is_dylib(p)) {
             result = corto_asprintf("lib%s.dylib", id);
@@ -422,17 +393,6 @@ char* standalone_artefact_name(
     free(id);
     return result;
 }
-
-/*
-"link": ["my/path/to/foo"],
-"lib": ["bar"],
-"use": ["corto", "hello/world"]
-
-link <= corto_locate("corto", ...)
-
-normal: gcc main.c libfoo.so $BAKE_HOME/corto/2.0/corto/libcorto.so -lbar
-standalone: gcc main.c libfoo.so -lcorto -lhello_world -lbar
-*/
 
 static
 void setup_link_cmd(
@@ -522,79 +482,28 @@ void link_binary(
     void *ctx)
 {
     corto_buffer cmd = CORTO_BUFFER_INIT;
-
     setup_link_cmd(l, p, c, source, target, ctx, &cmd);
 
-    corto_iter it = corto_ll_iter(p->link);
-    while (corto_iter_hasNext(&it)) {
-        char *lib = corto_iter_next(&it);
-        corto_buffer_append(&cmd, " %s", lib);
+    if (corto_file_test(c->libpath)) {
+        corto_buffer_append(&cmd, " -L%s", c->libpath);
     }
 
-    /* If on OSX, provide a few 'sensible' options for rpath because god forbid
-     * somebody might use it. */
-    if (is_darwin()) {
-        corto_buffer_append(
-            &cmd, " -Xlinker -rpath -Xlinker @loader_path");
-
-        corto_buffer_append(
-            &cmd, " -Xlinker -rpath -Xlinker @executable_path");
-
-        corto_buffer_append(
-            &cmd, " -Xlinker -rpath -Xlinker @executable_path");
+    if (strcmp(corto_getenv("BAKE_TARGET"), corto_getenv("BAKE_HOME"))) {
+        corto_buffer_append(&cmd, " -L%s/lib", c->homepath);
     }
-
-    /* Set the correct library path on OSX */
-    if (p->kind == BAKE_PACKAGE) {
-        if (is_darwin()) {
-            char *install_name = strrchr(target, '/');
-            if (install_name) {
-                install_name ++;
-            } else {
-                install_name = target;
-            }
-            install_name = corto_envparse(
-                "$BAKE_TARGET/lib/corto/$BAKE_VERSION/%s/%s",
-                p->id,
-                install_name);
-            corto_buffer_append(&cmd, " -install_name %s", install_name);
-            free(install_name);
-        }
-    }
-
-    corto_buffer_append(&cmd, " -o %s", target);
-
-    char *cmdstr = corto_buffer_str(&cmd);
-    l->exec(cmdstr);
-    free(cmdstr);
-}
-
-static
-void link_standalone(
-    bake_language *l,
-    bake_project *p,
-    bake_config *c,
-    char *source,
-    char *target,
-    void *ctx)
-{
-    corto_buffer cmd = CORTO_BUFFER_INIT;
-    setup_link_cmd(l, p, c, source, target, ctx, &cmd);
-
-    corto_buffer_append(&cmd, " -L%s", c->standalone_libpath);
 
     corto_iter it = corto_ll_iter(p->use);
     while (corto_iter_hasNext(&it)) {
         char *dep = corto_iter_next(&it);
-        char *standalone_lib = standalone_name(dep);
-        corto_buffer_append(&cmd, " -l%s", standalone_lib);
+        char *lib = project_name(dep);
+        corto_buffer_append(&cmd, " -l%s", lib);
     }
 
     it = corto_ll_iter(p->use_private);
     while (corto_iter_hasNext(&it)) {
         char *dep = corto_iter_next(&it);
-        char *standalone_lib = standalone_name(dep);
-        corto_buffer_append(&cmd, " -l%s", standalone_lib);
+        char *lib = project_name(dep);
+        corto_buffer_append(&cmd, " -l%s", lib);
     }
 
     it = corto_ll_iter(p->link);
@@ -630,16 +539,14 @@ void clean(
     bake_language *l,
     bake_project *p)
 {
-    if (p->managed) {
-        p->clean("include/_project.h");
-        p->clean("include/_type.h");
-        p->clean("include/_load.h");
-        p->clean("include/_interface.h");
-        p->clean("include/_api.h");
-        p->clean("include/_cpp.h");
-        p->clean("include/_binding.h");
-        p->clean("include/.prefix");
-    }
+    p->clean("include/_project.h");
+    p->clean("include/_type.h");
+    p->clean("include/_load.h");
+    p->clean("include/_interface.h");
+    p->clean("include/_api.h");
+    p->clean("include/_cpp.h");
+    p->clean("include/_binding.h");
+    p->clean("include/.prefix");
 }
 
 static
@@ -771,9 +678,6 @@ int bakemain(bake_language *l) {
     /* Create rule for creating binary from objects */
     l->rule("ARTEFACT", "$objects", l->target_pattern(NULL), link_binary);
 
-    /* Create rule for building standalone library */
-    l->rule("STANDALONE_ARTEFACT", "$objects", l->target_pattern(NULL), link_standalone);
-
     /* Add conditions to rules that are evaluated per project */
     l->condition("GENERATED-SOURCES", project_is_managed);
     l->condition("api-sources", project_has_model_and_public_and_package);
@@ -786,9 +690,6 @@ int bakemain(bake_language *l) {
 
     /* Callback for generating artefact name(s) */
     l->artefact(artefact_name);
-
-    /* Callback for generating artefact name(s) */
-    l->standalone_artefact(standalone_artefact_name);
 
     /* Callback for setting up a project */
     l->setup_project(setup_project);

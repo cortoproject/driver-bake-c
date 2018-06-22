@@ -21,10 +21,10 @@ ifeq ($(config),debug)
     AR = ar
   endif
   TARGETDIR = ..
-  TARGET = $(TARGETDIR)/libc.dylib
+  TARGET = $(TARGETDIR)/libdriver_bake_c.dylib
   OBJDIR = ../.bake_cache/debug
   DEFINES += -DDEBUG
-  INCLUDES += -I.. -I../../platform -I../../builder -I"$(BAKE_HOME)/include/corto/$(BAKE_VERSION)"
+  INCLUDES += -I.. -I../../platform -I../../builder -I"$(BAKE_HOME)/$(BAKE_VERSION)/$(BAKE_PLATFORM)-$(BAKE_CONFIG)/include"
   FORCE_INCLUDE +=
   ALL_CPPFLAGS += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
   ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -fPIC -g
@@ -32,7 +32,7 @@ ifeq ($(config),debug)
   ALL_RESFLAGS += $(RESFLAGS) $(DEFINES) $(INCLUDES)
   LIBS += -ldl -lm -lffi -lpthread
   LDDEPS +=
-  ALL_LDFLAGS += $(LDFLAGS) -dynamiclib -Wl,-install_name,@rpath/libc.dylib
+  ALL_LDFLAGS += $(LDFLAGS) -dynamiclib -Wl,-install_name,@rpath/libdriver_bake_c.dylib
   LINKCMD = $(CC) -o "$@" $(OBJECTS) $(RESOURCES) $(ALL_LDFLAGS) $(LIBS)
   define PREBUILDCMDS
   endef
@@ -56,10 +56,10 @@ ifeq ($(config),release)
     AR = ar
   endif
   TARGETDIR = ..
-  TARGET = $(TARGETDIR)/libc.dylib
+  TARGET = $(TARGETDIR)/libdriver_bake_c.dylib
   OBJDIR = ../.bake_cache/release
   DEFINES += -DNDEBUG
-  INCLUDES += -I.. -I../../platform -I../../builder -I"$(BAKE_HOME)/include/corto/$(BAKE_VERSION)"
+  INCLUDES += -I.. -I../../platform -I../../builder -I"$(BAKE_HOME)/$(BAKE_VERSION)/$(BAKE_PLATFORM)-$(BAKE_CONFIG)/include"
   FORCE_INCLUDE +=
   ALL_CPPFLAGS += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
   ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -O2 -fPIC
@@ -67,7 +67,7 @@ ifeq ($(config),release)
   ALL_RESFLAGS += $(RESFLAGS) $(DEFINES) $(INCLUDES)
   LIBS += -ldl -lm -lffi -lpthread
   LDDEPS +=
-  ALL_LDFLAGS += $(LDFLAGS) -dynamiclib -Wl,-install_name,@rpath/libc.dylib
+  ALL_LDFLAGS += $(LDFLAGS) -dynamiclib -Wl,-install_name,@rpath/libdriver_bake_c.dylib
   LINKCMD = $(CC) -o "$@" $(OBJECTS) $(RESOURCES) $(ALL_LDFLAGS) $(LIBS)
   define PREBUILDCMDS
   endef
@@ -81,7 +81,6 @@ all: prebuild prelink $(TARGET)
 endif
 
 OBJECTS := \
-	$(OBJDIR)/platform.o \
 	$(OBJDIR)/buffer.o \
 	$(OBJDIR)/dl.o \
 	$(OBJDIR)/entityadmin.o \
@@ -96,6 +95,7 @@ OBJECTS := \
 	$(OBJDIR)/log.o \
 	$(OBJDIR)/os.o \
 	$(OBJDIR)/path.o \
+	$(OBJDIR)/platform.o \
 	$(OBJDIR)/proc.o \
 	$(OBJDIR)/rb.o \
 	$(OBJDIR)/string.o \
@@ -117,7 +117,7 @@ ifeq (/bin,$(findstring /bin,$(SHELL)))
 endif
 
 $(TARGET): $(GCH) ${CUSTOMFILES} $(OBJECTS) $(LDDEPS) $(RESOURCES)
-	@echo Linking c
+	@echo Linking driver_bake_c
 ifeq (posix,$(SHELLTYPE))
 	$(SILENT) mkdir -p $(TARGETDIR)
 else
@@ -127,7 +127,7 @@ endif
 	$(POSTBUILDCMDS)
 
 clean:
-	@echo Cleaning c
+	@echo Cleaning driver_bake_c
 ifeq (posix,$(SHELLTYPE))
 	$(SILENT) rm -f  $(TARGET)
 	$(SILENT) rm -rf $(OBJDIR)
@@ -154,14 +154,6 @@ endif
 	$(SILENT) $(CC) -x c-header $(ALL_CFLAGS) -o "$@" -MF "$(@:%.gch=%.d)" -c "$<"
 endif
 
-$(OBJDIR)/platform.o: ../../platform/src/platform.c
-	@echo $(notdir $<)
-ifeq (posix,$(SHELLTYPE))
-	$(SILENT) mkdir -p $(OBJDIR)
-else
-	$(SILENT) mkdir $(subst /,\\,$(OBJDIR))
-endif
-	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
 $(OBJDIR)/buffer.o: ../../platform/src/buffer.c
 	@echo $(notdir $<)
 ifeq (posix,$(SHELLTYPE))
@@ -267,6 +259,14 @@ else
 endif
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
 $(OBJDIR)/path.o: ../../platform/src/path.c
+	@echo $(notdir $<)
+ifeq (posix,$(SHELLTYPE))
+	$(SILENT) mkdir -p $(OBJDIR)
+else
+	$(SILENT) mkdir $(subst /,\\,$(OBJDIR))
+endif
+	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
+$(OBJDIR)/platform.o: ../../platform/src/platform.c
 	@echo $(notdir $<)
 ifeq (posix,$(SHELLTYPE))
 	$(SILENT) mkdir -p $(OBJDIR)

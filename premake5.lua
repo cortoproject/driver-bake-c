@@ -1,12 +1,12 @@
 
-workspace "c"
+workspace "driver_bake_c"
   configurations { "debug", "release" }
   location "build"
 
   configuration { "linux", "gmake" }
     buildoptions { "-std=c99", "-D_XOPEN_SOURCE=600" }
 
-  project "c"
+  project "driver_bake_c"
     kind "SharedLib"
     language "C"
     location "build"
@@ -15,7 +15,7 @@ workspace "c"
     objdir ".bake_cache"
 
     files { "include/*.h", "src/*.c", "../platform/src/*.c" }
-    includedirs { ".", "../platform", "../builder", "$(BAKE_HOME)/include/corto/$(BAKE_VERSION)" }
+    includedirs { ".", "../platform", "../builder", "$(BAKE_HOME)/$(BAKE_VERSION)/$(BAKE_PLATFORM)-$(BAKE_CONFIG)/include" }
 
     configuration "linux"
       links { "rt", "dl", "m", "ffi", "pthread" }
