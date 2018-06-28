@@ -492,21 +492,7 @@ void link_binary(
         corto_buffer_append(&cmd, " -L%s/lib", c->homepath);
     }
 
-    corto_iter it = corto_ll_iter(p->use);
-    while (corto_iter_hasNext(&it)) {
-        char *dep = corto_iter_next(&it);
-        char *lib = project_name(dep);
-        corto_buffer_append(&cmd, " -l%s", lib);
-    }
-
-    it = corto_ll_iter(p->use_private);
-    while (corto_iter_hasNext(&it)) {
-        char *dep = corto_iter_next(&it);
-        char *lib = project_name(dep);
-        corto_buffer_append(&cmd, " -l%s", lib);
-    }
-
-    it = corto_ll_iter(p->link);
+    corto_iter it = corto_ll_iter(p->link);
     while (corto_iter_hasNext(&it)) {
         char *dep = corto_iter_next(&it);
         corto_buffer_append(&cmd, " -l%s", dep);
