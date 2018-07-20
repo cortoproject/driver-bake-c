@@ -114,10 +114,11 @@ void gen_source(
                 if (!strcmp(use, strarg("%s/c", p->id)) ||
                     !strcmp(use, strarg("%s/cpp", p->id)))
                 {
-                  /* Should not add own generated language packages because they
-                   * may not yet exist */
-                  continue;
+                    /* Should not add own generated language packages because they
+                     * may not yet exist */
+                    continue;
                 }
+
                 if (count) {
                     corto_buffer_append(&imports, ",");
                 }
@@ -140,9 +141,9 @@ void gen_source(
                 if (!strcmp(use, strarg("%s/c", p->id)) ||
                     !strcmp(use, strarg("%s/cpp", p->id)))
                 {
-                  /* Should not add own generated language packages because they
-                   * may not yet exist */
-                  continue;
+                    /* Should not add own generated language packages because they
+                     * may not yet exist */
+                    continue;
                 }
                 if (count) {
                     corto_buffer_append(&imports, ",");
@@ -221,7 +222,7 @@ void compile_src(
         isCpp = true;
     }
 
-    corto_buffer_append(&cmd, "%s -Wall -fPIC", cc(p));
+    corto_buffer_append(&cmd, "%s -Wall -fPIC -fno-stack-protector", cc(p));
 
     if (isCpp) {
         corto_buffer_appendstr(&cmd, " -std=c++0x -Wno-write-strings");
@@ -382,10 +383,16 @@ char* artefact_name(
     char *result;
     char *id = project_name(p->id);
     if (p->kind == BAKE_PACKAGE) {
-        if (is_dylib(p)) {
-            result = corto_asprintf("lib%s.dylib", id);
+        bool link_static = p->get_attr_bool("static_artefact");
+
+        if (link_static) {
+            result = corto_asprintf("lib%s.a", id);
         } else {
-            result = corto_asprintf("lib%s.so", id);
+            if (is_dylib(p)) {
+                result = corto_asprintf("lib%s.dylib", id);
+            } else {
+                result = corto_asprintf("lib%s.so", id);
+            }
         }
     } else {
         result = corto_strdup(id);
@@ -395,85 +402,7 @@ char* artefact_name(
 }
 
 static
-void setup_link_cmd(
-    bake_language *l,
-    bake_project *p,
-    bake_config *c,
-    char *source,
-    char *target,
-    void *ctx,
-    corto_buffer *cmd)
-{
-    bool c4cpp = !strcmp(p->get_attr_string("c4cpp"), "true");
-
-    corto_buffer_append(cmd, "%s -Wall -fPIC", cc(p));
-
-    if (p->managed) {
-        corto_buffer_appendstr(cmd, " -fvisibility=hidden");
-    }
-
-    if (p->kind == BAKE_PACKAGE) {
-        corto_buffer_appendstr(cmd, " --shared");
-        if (!is_darwin()) {
-            corto_buffer_appendstr(cmd, " -Wl,-z,defs");
-        }
-    }
-
-    if (c->optimizations) {
-        corto_buffer_appendstr(cmd, " -O3");
-    } else {
-        corto_buffer_appendstr(cmd, " -O0");
-    }
-
-    if (c->strict) {
-        corto_buffer_appendstr(cmd, " -Werror -pedantic");
-    }
-
-    if (is_dylib(p)) {
-        corto_buffer_appendstr(cmd, " -dynamiclib");
-    }
-
-    /* LDFLAGS */
-    bake_project_attr *flags_attr = p->get_attr("ldflags");
-    if (flags_attr) {
-        corto_iter it = corto_ll_iter(flags_attr->is.array);
-        while (corto_iter_hasNext(&it)) {
-            bake_project_attr *flag = corto_iter_next(&it);
-            corto_buffer_append(cmd, " %s", flag->is.string);
-        }
-    }
-
-    corto_buffer_append(cmd, " %s", source);
-
-    bake_project_attr *lib_attr = p->get_attr("lib");
-    if (lib_attr) {
-        corto_iter it = corto_ll_iter(lib_attr->is.array);
-        while (corto_iter_hasNext(&it)) {
-            bake_project_attr *lib = corto_iter_next(&it);
-            const char *mapped = lib_map(lib->is.string);
-            if (mapped) {
-                corto_buffer_append(cmd, " -l%s", mapped);
-            }
-        }
-    }
-
-    bake_project_attr *libpath_attr = p->get_attr("libpath");
-    if (libpath_attr) {
-        corto_iter it = corto_ll_iter(libpath_attr->is.array);
-        while (corto_iter_hasNext(&it)) {
-            bake_project_attr *lib = corto_iter_next(&it);
-            corto_buffer_append(cmd, " -L%s", lib->is.string);
-
-            if (is_darwin()) {
-                corto_buffer_append(
-                    cmd, " -Xlinker -rpath -Xlinker %s", lib->is.string);
-            }
-        }
-    }
-}
-
-static
-void link_binary(
+void link_dynamic_binary(
     bake_language *l,
     bake_project *p,
     bake_config *c,
@@ -482,7 +411,44 @@ void link_binary(
     void *ctx)
 {
     corto_buffer cmd = CORTO_BUFFER_INIT;
-    setup_link_cmd(l, p, c, source, target, ctx, &cmd);
+
+    corto_buffer_append(&cmd, "%s -Wall -fPIC", cc(p));
+
+    if (p->kind == BAKE_PACKAGE) {
+        if (p->managed && !is_darwin()) {
+            corto_buffer_appendstr(&cmd, " -Wl,-fvisibility=hidden");
+        }
+        corto_buffer_appendstr(&cmd, " -fno-stack-protector --shared");
+        if (!is_darwin()) {
+            corto_buffer_appendstr(&cmd, " -Wl,-z,defs");
+        }
+    }
+
+    if (c->optimizations) {
+        corto_buffer_appendstr(&cmd, " -O3");
+    } else {
+        corto_buffer_appendstr(&cmd, " -O0");
+    }
+
+    if (c->strict) {
+        corto_buffer_appendstr(&cmd, " -Werror -pedantic");
+    }
+
+    if (is_dylib(p)) {
+        corto_buffer_appendstr(&cmd, " -dynamiclib");
+    }
+
+    /* LDFLAGS */
+    bake_project_attr *flags_attr = p->get_attr("ldflags");
+    if (flags_attr) {
+        corto_iter it = corto_ll_iter(flags_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *flag = corto_iter_next(&it);
+            corto_buffer_append(&cmd, " %s", flag->is.string);
+        }
+    }
+
+    corto_buffer_append(&cmd, " %s", source);
 
     if (corto_file_test(c->libpath)) {
         corto_buffer_append(&cmd, " -L%s", c->libpath);
@@ -498,11 +464,71 @@ void link_binary(
         corto_buffer_append(&cmd, " -l%s", dep);
     }
 
+    bake_project_attr *libpath_attr = p->get_attr("libpath");
+    if (libpath_attr) {
+        corto_iter it = corto_ll_iter(libpath_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *lib = corto_iter_next(&it);
+            corto_buffer_append(&cmd, " -L%s", lib->is.string);
+
+            if (is_darwin()) {
+                corto_buffer_append(
+                    &cmd, " -Xlinker -rpath -Xlinker %s", lib->is.string);
+            }
+        }
+    }
+
+    bake_project_attr *lib_attr = p->get_attr("lib");
+    if (lib_attr) {
+        corto_iter it = corto_ll_iter(lib_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *lib = corto_iter_next(&it);
+            const char *mapped = lib_map(lib->is.string);
+            if (mapped) {
+                corto_buffer_append(&cmd, " -l%s", mapped);
+            }
+        }
+    }
+
     corto_buffer_append(&cmd, " -o %s", target);
 
     char *cmdstr = corto_buffer_str(&cmd);
     l->exec(cmdstr);
     free(cmdstr);
+}
+
+static
+void link_static_binary(
+    bake_language *l,
+    bake_project *p,
+    bake_config *c,
+    char *source,
+    char *target,
+    void *ctx)
+{
+    corto_buffer cmd = CORTO_BUFFER_INIT;
+    corto_buffer_append(&cmd, "ar rcs %s %s", target, source);
+    char *cmdstr = corto_buffer_str(&cmd);
+    l->exec(cmdstr);
+    free(cmdstr);
+}
+
+static
+void link_binary(
+    bake_language *l,
+    bake_project *p,
+    bake_config *c,
+    char *source,
+    char *target,
+    void *ctx)
+{
+    bool link_static = p->get_attr_bool("static_artefact");
+
+    if (link_static) {
+        link_static_binary(l, p, c, source, target, ctx);
+    } else {
+        link_dynamic_binary(l, p, c, source, target, ctx);
+    }
 }
 
 static
@@ -643,7 +669,7 @@ int bakemain(bake_language *l) {
     l->pattern("gen-sources-2", ".bake_cache/gen//*.c|*.cpp|*.cxx");
 
     /* Create pattern that matches files in generated binding API */
-    l->pattern("api-sources", "c/src/*.c|*.cpp");
+    l->pattern("api-sources", "c/src/_api.c|_api.cpp");
 
     /* Generate rule for dynamically generating source for definition file */
     l->rule("GENERATED-SOURCES", "$MODEL,project.json", l->target_pattern("$gen-sources,$api-sources"), gen_source);
