@@ -643,7 +643,7 @@ int bakemain(bake_language *l) {
     l->pattern("gen-sources-2", ".bake_cache/gen//*.c|*.cpp|*.cxx");
 
     /* Create pattern that matches files in generated binding API */
-    l->pattern("api-sources", "c/src/_api.c|_api.cpp");
+    l->pattern("api-sources", "c/src/*.c|*.cpp");
 
     /* Generate rule for dynamically generating source for definition file */
     l->rule("GENERATED-SOURCES", "$MODEL,project.json", l->target_pattern("$gen-sources,$api-sources"), gen_source);
