@@ -344,6 +344,49 @@ const char* lib_map(
 }
 
 static
+char* find_static_lib(
+    bake_project *p,
+    bake_config *c,
+    const char *lib)
+{
+    int ret;
+
+    /* Find static library in configuration libpath */
+    char *file = corto_asprintf("%s/lib%s.a", c->libpath, lib);
+    if ((ret = corto_file_test(file)) == 1) {
+        return file;
+    } else if (ret != 0) {
+        free(file);
+        corto_error("could not access '%s'", file);
+        return NULL;
+    }
+
+    free(file);
+
+    /* If static library is not found in configuration, try libpath */
+    bake_project_attr *libpath_attr = p->get_attr("libpath");
+    if (libpath_attr) {
+        corto_iter it = corto_ll_iter(libpath_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *lib = corto_iter_next(&it);
+            file = corto_asprintf("%s/lib%s.a", lib->is.string, lib);
+
+            if ((ret = corto_file_test(file)) == 1) {
+                return file;
+            } else if (ret != 0) {
+                free(file);
+                corto_error("could not access '%s'", file);
+                return NULL;
+            }
+
+            free(file);
+        }
+    }
+
+    return NULL;
+}
+
+static
 bool is_dylib(
     bake_project *p)
 {
@@ -411,12 +454,15 @@ void link_dynamic_binary(
     void *ctx)
 {
     corto_buffer cmd = CORTO_BUFFER_INIT;
+    bool hide_symbols = false;
+    corto_ll static_object_paths = NULL;
 
     corto_buffer_append(&cmd, "%s -Wall -fPIC", cc(p));
 
     if (p->kind == BAKE_PACKAGE) {
         if (p->managed && !is_darwin()) {
             corto_buffer_appendstr(&cmd, " -Wl,-fvisibility=hidden");
+            hide_symbols = true;
         }
         corto_buffer_appendstr(&cmd, " -fno-stack-protector --shared");
         if (!is_darwin()) {
@@ -490,11 +536,65 @@ void link_dynamic_binary(
         }
     }
 
+    bake_project_attr *static_lib_attr = p->get_attr("static_lib");
+    if (static_lib_attr) {
+        corto_iter it = corto_ll_iter(static_lib_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *lib = corto_iter_next(&it);
+            if (hide_symbols) {
+                /* If hiding symbols and linking with static library, unpack
+                 * library objects to temp directory. If the library would be
+                 * linked as-is, symbols would be exported, even though
+                 * fvisibility is set to hidden */
+                char *static_lib = find_static_lib(p, c, lib->is.string);
+                if (!static_lib) {
+                    continue;
+                }
+
+                char *cwd = strdup(corto_cwd());
+                char *obj_path = corto_asprintf(".bake_cache/obj_%s/%s-%s",
+                    lib->is.string, CORTO_PLATFORM_STRING, c->id);
+                char *unpack_cmd = corto_asprintf("ar x %s", static_lib);
+
+                /* The ar command doesn't have an option to output files to a
+                 * specific directory, so have to use chdir. This will be an
+                 * issue for multithreaded builds. */
+                corto_mkdir(obj_path);
+                corto_chdir(obj_path);
+                l->exec(unpack_cmd);
+                free(unpack_cmd);
+                free(static_lib);
+                corto_chdir(cwd);
+                free(cwd);                
+                corto_buffer_append(&cmd, " %s/*", obj_path);
+
+                if (!static_object_paths) {
+                    static_object_paths = corto_ll_new();
+                }
+
+                corto_ll_append(static_object_paths, obj_path);
+            } else {
+                corto_buffer_append(&cmd, " -l%s", lib);
+            }
+        }
+    }
+
     corto_buffer_append(&cmd, " -o %s", target);
 
     char *cmdstr = corto_buffer_str(&cmd);
     l->exec(cmdstr);
     free(cmdstr);
+
+    /* If static libraries were unpacked, cleanup temporary directories */
+    it = corto_ll_iter(static_object_paths);
+    while (corto_iter_hasNext(&it)) {
+        char *obj_path = corto_iter_next(&it);
+        //corto_rm(obj_path);
+        free(obj_path);
+    }
+    if (static_object_paths) {
+        corto_ll_free(static_object_paths);
+    }
 }
 
 static
