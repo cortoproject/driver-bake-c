@@ -565,7 +565,7 @@ void link_dynamic_binary(
                 free(unpack_cmd);
                 free(static_lib);
                 corto_chdir(cwd);
-                free(cwd);                
+                free(cwd);
                 corto_buffer_append(&cmd, " %s/*", obj_path);
 
                 if (!static_object_paths) {
@@ -728,7 +728,7 @@ int16_t setup_project(
         "#define %s_H\n"
         "\n"
         "#ifdef __cplusplus\n"
-        "extern \"c\" {\n"
+        "extern \"C\" {\n"
         "#endif\n"
         "\n"
         "#ifdef __cplusplus\n"
@@ -769,10 +769,10 @@ int bakemain(bake_language *l) {
     l->pattern("gen-sources-2", ".bake_cache/gen//*.c|*.cpp|*.cxx");
 
     /* Create pattern that matches files in generated binding API */
-    l->pattern("api-sources", "c/src/_api.c|_api.cpp");
+    l->pattern("api-sources", "c|cpp");
 
     /* Generate rule for dynamically generating source for definition file */
-    l->rule("GENERATED-SOURCES", "$MODEL,project.json", l->target_pattern("$gen-sources,$api-sources"), gen_source);
+    l->rule("GENERATED-SOURCES", "$MODEL,project.json", l->target_pattern("$gen-sources"), gen_source);
 
     /* Create pattern that matches source files */
     l->pattern("SOURCES", "//*.c|*.cpp|*.cxx");
