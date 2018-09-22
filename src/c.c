@@ -368,8 +368,8 @@ char* find_static_lib(
     if (libpath_attr) {
         corto_iter it = corto_ll_iter(libpath_attr->is.array);
         while (corto_iter_hasNext(&it)) {
-            bake_project_attr *lib = corto_iter_next(&it);
-            file = corto_asprintf("%s/lib%s.a", lib->is.string, lib);
+            bake_project_attr *lib_attr = corto_iter_next(&it);
+            file = corto_asprintf("%s/lib%s.a", lib_attr->is.string, lib);
 
             if ((ret = corto_file_test(file)) == 1) {
                 return file;
