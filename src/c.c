@@ -368,8 +368,8 @@ char* find_static_lib(
     if (libpath_attr) {
         corto_iter it = corto_ll_iter(libpath_attr->is.array);
         while (corto_iter_hasNext(&it)) {
-            bake_project_attr *lib = corto_iter_next(&it);
-            file = corto_asprintf("%s/lib%s.a", lib->is.string, lib);
+            bake_project_attr *lib_attr = corto_iter_next(&it);
+            file = corto_asprintf("%s/lib%s.a", lib_attr->is.string, lib);
 
             if ((ret = corto_file_test(file)) == 1) {
                 return file;
@@ -565,7 +565,7 @@ void link_dynamic_binary(
                 free(unpack_cmd);
                 free(static_lib);
                 corto_chdir(cwd);
-                free(cwd);                
+                free(cwd);
                 corto_buffer_append(&cmd, " %s/*", obj_path);
 
                 if (!static_object_paths) {
