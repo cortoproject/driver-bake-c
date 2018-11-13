@@ -13,6 +13,12 @@ char* get_short_name(
     } else {
         result ++;
     }
+
+    char *ptr = strrchr(package, '.');
+    if (ptr) {
+        result = ptr + 1;
+    }
+
     return result;
 }
 
@@ -264,7 +270,7 @@ void compile_src(
         corto_buffer_appendstr(&cmd, " -DNDEBUG");
     }
     if (c->optimizations) {
-        corto_buffer_appendstr(&cmd, " -O3");
+        corto_buffer_appendstr(&cmd, " -O3 -flto");
     } else {
         corto_buffer_appendstr(&cmd, " -O0");
     }
@@ -715,7 +721,7 @@ int16_t setup_project(
     strupper(id_upper);
     char *ptr, ch;
     for (ptr = id_upper; (ch = *ptr); ptr ++) {
-        if (ch == '/') {
+        if (ch == '/' || ch == '.') {
             ptr[0] = '_';
         }
     }
