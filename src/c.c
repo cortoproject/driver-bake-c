@@ -374,8 +374,8 @@ char* find_static_lib(
     if (libpath_attr) {
         corto_iter it = corto_ll_iter(libpath_attr->is.array);
         while (corto_iter_hasNext(&it)) {
-            bake_project_attr *lib = corto_iter_next(&it);
-            file = corto_asprintf("%s/lib%s.a", lib->is.string, lib);
+            bake_project_attr *lib_attr = corto_iter_next(&it);
+            file = corto_asprintf("%s/lib%s.a", lib_attr->is.string, lib);
 
             if ((ret = corto_file_test(file)) == 1) {
                 return file;
@@ -516,32 +516,6 @@ void link_dynamic_binary(
         corto_buffer_append(&cmd, " -l%s", dep);
     }
 
-    bake_project_attr *libpath_attr = p->get_attr("libpath");
-    if (libpath_attr) {
-        corto_iter it = corto_ll_iter(libpath_attr->is.array);
-        while (corto_iter_hasNext(&it)) {
-            bake_project_attr *lib = corto_iter_next(&it);
-            corto_buffer_append(&cmd, " -L%s", lib->is.string);
-
-            if (is_darwin()) {
-                corto_buffer_append(
-                    &cmd, " -Xlinker -rpath -Xlinker %s", lib->is.string);
-            }
-        }
-    }
-
-    bake_project_attr *lib_attr = p->get_attr("lib");
-    if (lib_attr) {
-        corto_iter it = corto_ll_iter(lib_attr->is.array);
-        while (corto_iter_hasNext(&it)) {
-            bake_project_attr *lib = corto_iter_next(&it);
-            const char *mapped = lib_map(lib->is.string);
-            if (mapped) {
-                corto_buffer_append(&cmd, " -l%s", mapped);
-            }
-        }
-    }
-
     bake_project_attr *static_lib_attr = p->get_attr("static_lib");
     if (static_lib_attr) {
         corto_iter it = corto_ll_iter(static_lib_attr->is.array);
@@ -581,6 +555,32 @@ void link_dynamic_binary(
                 corto_ll_append(static_object_paths, obj_path);
             } else {
                 corto_buffer_append(&cmd, " -l%s", lib);
+            }
+        }
+    }
+
+    bake_project_attr *libpath_attr = p->get_attr("libpath");
+    if (libpath_attr) {
+        corto_iter it = corto_ll_iter(libpath_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *lib = corto_iter_next(&it);
+            corto_buffer_append(&cmd, " -L%s", lib->is.string);
+
+            if (is_darwin()) {
+                corto_buffer_append(
+                    &cmd, " -Xlinker -rpath -Xlinker %s", lib->is.string);
+            }
+        }
+    }
+
+    bake_project_attr *lib_attr = p->get_attr("lib");
+    if (lib_attr) {
+        corto_iter it = corto_ll_iter(lib_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *lib = corto_iter_next(&it);
+            const char *mapped = lib_map(lib->is.string);
+            if (mapped) {
+                corto_buffer_append(&cmd, " -l%s", mapped);
             }
         }
     }
