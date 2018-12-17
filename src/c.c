@@ -526,16 +526,17 @@ void link_dynamic_binary(
                  * library objects to temp directory. If the library would be
                  * linked as-is, symbols would be exported, even though
                  * fvisibility is set to hidden */
+
                 char *static_lib = find_static_lib(p, c, lib->is.string);
                 if (!static_lib) {
                     continue;
                 }
 
                 char *cwd = strdup(corto_cwd());
-                char *obj_path = corto_asprintf(".bake_cache/obj_%s/%s-%s",
-                    lib->is.string, CORTO_PLATFORM_STRING, c->id);
-                char *unpack_cmd = corto_asprintf("ar x %s", static_lib);
 
+                char *obj_path = corto_asprintf(".bake_cache/obj_%s/%s-%s",
+                    static_lib, CORTO_PLATFORM_STRING, c->id);
+                char *unpack_cmd = corto_asprintf("ar x %s", static_lib);
                 /* The ar command doesn't have an option to output files to a
                  * specific directory, so have to use chdir. This will be an
                  * issue for multithreaded builds. */
@@ -546,6 +547,7 @@ void link_dynamic_binary(
                 free(static_lib);
                 corto_chdir(cwd);
                 free(cwd);
+
                 corto_buffer_append(&cmd, " %s/*", obj_path);
 
                 if (!static_object_paths) {
@@ -554,7 +556,7 @@ void link_dynamic_binary(
 
                 corto_ll_append(static_object_paths, obj_path);
             } else {
-                corto_buffer_append(&cmd, " -l%s", lib);
+                corto_buffer_append(&cmd, " -l%s", lib->is.string);
             }
         }
     }
@@ -582,6 +584,17 @@ void link_dynamic_binary(
             if (mapped) {
                 corto_buffer_append(&cmd, " -l%s", mapped);
             }
+        }
+    }
+
+    /* LDFLAGS POST - Used to specify required linker flags after objs */
+    bake_project_attr *post_flags_attr = p->get_attr("ldflags_post");
+    if (post_flags_attr) {
+        corto_iter it = corto_ll_iter(post_flags_attr->is.array);
+        while (corto_iter_hasNext(&it)) {
+            bake_project_attr *flag = corto_iter_next(&it);
+            corto_info("LIB = %s", flag->is.string);
+            corto_buffer_append(&cmd, " %s", flag->is.string);
         }
     }
 
