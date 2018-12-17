@@ -17,6 +17,7 @@ Property | Type | Description
 cflags   | list[string] | List of arguments to pass to the C compiler
 cxxflags | list[string] | List of arguments to pass to the C++ compiler
 ldflags | list[string] | List of arguments to pass to the linker
+ldflags_post | list[string] | List of arguments to pass to the linker after the objs 
 lib | list[string] | List of library names to link with
 static_lib | list[string] | List of static libraries to link with.
 libpath | list[string] |
