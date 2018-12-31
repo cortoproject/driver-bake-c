@@ -593,7 +593,6 @@ void link_dynamic_binary(
         corto_iter it = corto_ll_iter(post_flags_attr->is.array);
         while (corto_iter_hasNext(&it)) {
             bake_project_attr *flag = corto_iter_next(&it);
-            corto_info("LIB = %s", flag->is.string);
             corto_buffer_append(&cmd, " %s", flag->is.string);
         }
     }
